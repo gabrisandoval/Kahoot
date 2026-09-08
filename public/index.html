@@ -1,10 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>KAHOOT</title>
-</head>
+<html lang="it">
+<head><meta charset="UTF-8"><title>Test Socket.IO</title></head>
 <body>
-    <h1>Titolo funziona</h1>
+<h1 id="status">Connessione in corso...</h1>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+
+    socket.on('connect', () => {
+        document.getElementById('status').innerText = 'Connesso al server! ID: ' + socket.id;
+    });
+</script>
 </body>
 </html>
