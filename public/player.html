@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><title>Gioca</title></head>
+<body>
+<h1>Entra nel quiz</h1>
+
+<input id="pinInput" placeholder="PIN stanza">
+<input id="nicknameInput" placeholder="Il tuo nome">
+<button onclick="joinRoom()">Entra</button>
+
+<p id="message"></p>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  function joinRoom() {
+    const pin = document.getElementById('pinInput').value.trim();
+    const nickname = document.getElementById('nicknameInput').value.trim();
+
+    if (!pin || !nickname) {
+      document.getElementById('message').innerText = 'Inserisci PIN e nome';
+      return;
+    }
+
+    socket.emit('player-join', { pin, nickname });
+  }
+
+  socket.on('join-success', ({ nickname }) => {
+    document.getElementById('message').innerText = 'Benvenuto ' + nickname + '! Sei entrato nella stanza.';
+  });
+
+  socket.on('join-error', (msg) => {
+    document.getElementById('message').innerText = msg;
+  });
+</script>
+</body>
+</html>

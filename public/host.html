@@ -8,6 +8,7 @@
   <h1>Crea una partita</h1>
   <button onclick="createRoom()">Crea una stanza</button>
   <h2 id="pin"></h2>
+  <p id="players"></p>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -22,6 +23,10 @@
 
     socket.on('room created', ({pin}) =>{
       document.getElementById('pin').innerText = 'PIN' + pin;
+    });
+
+    socket.on('player-list-update', (players) => {
+        document.getElementById('players').innerText = 'Giocatori: ' + players.join(', ');
     });
   </script>
 
