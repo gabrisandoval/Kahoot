@@ -1,20 +1,37 @@
 <!DOCTYPE html>
 <html lang="it">
-<head><meta charset="UTF-8"><title>Gioca</title></head>
+<head>
+    <meta charset="UTF-8">
+    <title>Gioca</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+</head>
 <body>
-<h1>Entra nel quiz</h1>
+<div class="player-page">
+    <div id="joinScreen" style="flex:1; display:flex; flex-direction:column; justify-content:center; padding:16px 12px; width:100%; box-sizing:border-box;">
+        <h1 style="font-family:var(--font-display); font-size:clamp(40px,14vw,72px); text-align:center; margin-bottom:32px; line-height:1.05;">Entra nel quiz</h1>
+        <div class="join-form" style="width:100%;">
+            <input id="pinInput" placeholder="PIN" style="width:100%; box-sizing:border-box; font-size:clamp(48px,20vw,90px); text-align:center; letter-spacing:6px; padding:28px 8px; font-family:var(--font-display); font-weight:700;">
+            <input id="nicknameInput" placeholder="Il tuo nome" style="width:100%; box-sizing:border-box; font-size:clamp(26px,8vw,36px); padding:26px 22px;">
+            <button class="btn btn-accent" style="width:100%; box-sizing:border-box; font-size:clamp(26px,8vw,36px); padding:26px 12px;" onclick="joinRoom()">Entra</button>
+        </div>
+        <p id="message" style="color:var(--coral); font-weight:600; text-align:center; font-size:clamp(18px,5vw,24px);"></p>
+    </div>
 
-<input id="pinInput" placeholder="PIN stanza">
-<input id="nicknameInput" placeholder="Il tuo nome">
-<button onclick="joinRoom()">Entra</button>
-
-<p id="message"></p>
-<div id="question"></div>
+    <div id="question" class="options-grid"></div>
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
     let currentPin = null;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const pinFromUrl = urlParams.get('pin');
+    if (pinFromUrl) {
+        document.getElementById('pinInput').value = pinFromUrl;
+    }
 
     function joinRoom() {
         const pin = document.getElementById('pinInput').value.trim();
@@ -30,41 +47,55 @@
 
     socket.on('join-success', ({ pin, nickname }) => {
         currentPin = pin;
-        document.getElementById('message').innerText = 'Benvenuto ' + nickname + '! Sei entrato nella stanza.';
+        document.getElementById('joinScreen').innerHTML =
+            '<div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:16px;">' +
+            '<h1 style="font-family:var(--font-display); font-size:clamp(56px,20vw,100px); line-height:1.0; margin-bottom:24px;">Ciao ' + nickname + '!</h1>' +
+            '<p style="font-size:clamp(28px,9vw,42px); opacity:.75; max-width:90%;">In attesa che l\'host avvii la domanda...</p>' +
+            '</div>';
     });
 
     socket.on('join-error', (msg) => {
         document.getElementById('message').innerText = msg;
     });
 
-    socket.on('new-question', ({ question, options }) => {
-        const html = '<h2>' + question + '</h2>' +
-            options.map((o, i) =>
-                '<button onclick="submitAnswer(' + i + ')">' + o + '</button>'
-            ).join('');
+    const shapes = ['▲', '◆', '●', '■'];
+
+    socket.on('new-question', ({ options }) => {
+        document.getElementById('joinScreen').style.display = 'none';
+        const html = options.map((o, i) =>
+            '<button class="option-btn option-' + i + '" onclick="submitAnswer(' + i + ')"><span class="shape" style="font-size:3em;">' + shapes[i] + '</span></button>'
+        ).join('');
         document.getElementById('question').innerHTML = html;
     });
 
     function submitAnswer(index) {
         socket.emit('submit-answer', { pin: currentPin, answerIndex: index });
-        document.getElementById('question').innerHTML += '<p>Risposta inviata!</p>';
+        document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
     }
 
     socket.on('answer-result', ({ correct, points }) => {
-        document.getElementById('question').innerHTML +=
-            correct ? '<p>Corretto! +' + points + ' punti</p>' : '<p>Sbagliato</p>';
-    });
-
-    socket.on('game-over', (leaderboard) => {
-        const html = '<h2>Partita finita!</h2>' +
-            leaderboard.map((p, i) =>
-                '<p>' + (i + 1) + '. ' + p.nickname + ' — ' + p.score + ' punti</p>'
-            ).join('');
+        const html = '<div style="grid-column:1/-1; padding:24px; text-align:center; font-family:var(--font-display); font-size:24px; color:' + (correct ? 'var(--green)' : 'var(--coral)') + ';">' +
+            (correct ? 'Corretto! +' + points + ' punti' : 'Sbagliato') + '</div>';
         document.getElementById('question').innerHTML = html;
     });
 
-    socket.on('game-restarted', () => { // NUOVO
-        document.getElementById('question').innerHTML = '<p>In attesa che l\'host inizi una nuova partita...</p>';
+    socket.on('game-over', (leaderboard) => {
+        const html = '<div style="grid-column:1/-1; padding:24px;"><h1 style="font-family:var(--font-display); text-align:center;">Partita finita!</h1>' +
+            leaderboard.map((p, i) => '<div class="leaderboard-row"><span>' + (i + 1) + '. ' + p.nickname + '</span><span>' + p.score + '</span></div>').join('') +
+            '</div>';
+        document.getElementById('question').innerHTML = html;
+    });
+
+    socket.on('game-restarted', () => {
+        document.getElementById('question').innerHTML =
+            '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:60vh; padding:16px;">' +
+            '<p style="font-size:clamp(30px,10vw,48px); opacity:.75; max-width:90%;">In attesa che l\'host inizi una nuova partita...</p>' +
+            '</div>';
+    });
+
+    socket.on('room-closed', () => {
+        alert('L\'host ha chiuso la stanza');
+        location.reload();
     });
 </script>
 </body>

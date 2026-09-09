@@ -1,13 +1,21 @@
 <!DOCTYPE html>
 <html lang="it">
-<head><meta charset="UTF-8"><title>Quiz</title></head>
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+</head>
 <body>
-<h1>Benvenuto nel quiz</h1>
-
-<a href="/host.html" target="_blank">Crea una partita (Host)</a>
-<br>
-<a href="/player.html" target="_blank">Entra in una partita (Giocatore)</a>
-<br>
-<a href="/questions.html">Gestisci domande</a>
+<div class="stage">
+    <h1 style="font-family:var(--font-display); font-size:clamp(32px,6vw,56px);">Quiz Live</h1>
+    <p style="max-width:420px; opacity:.85;">Crea una partita, condividi il PIN e gioca in tempo reale.</p>
+    <div style="display:flex; flex-direction:column; gap:16px; margin-top:32px; width:100%; max-width:280px;">
+        <a href="/host.html"><button class="btn btn-on-dark" style="width:100%;">Crea una partita</button></a>
+        <a href="/player.html"><button class="btn btn-on-dark" style="width:100%;">Entra in una partita</button></a>
+        <a href="/questions.html"><button class="btn btn-on-dark" style="width:100%;">Gestisci domande</button></a>
+    </div>
+</div>
 </body>
 </html>

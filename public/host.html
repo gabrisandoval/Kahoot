@@ -1,50 +1,90 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
     <meta charset="UTF-8">
-    <title>HOST</title>
+    <title>Host</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-<h1>Crea una partita</h1>
-<button onclick="createRoom()">Crea una stanza</button>
-<h2 id="pin"></h2>
+<div class="stage">
+    <h1 style="font-family:var(--font-display);">Lobby partita</h1>
 
-<div id="qrcode"></div>
-<p id="joinLinkText"></p>
-<button id="copyLinkBtn" onclick="copyLink()" style="display:none;">Copia link</button>
+    <div class="pin-display" id="pin"></div>
 
-<p id="players"></p>
-<button onclick="nextQuestion()">Invia prossima domanda</button>
-<p id="answerCount"></p>
-<div id="leaderboard"></div>
-<button id="lockBtn" onclick="toggleLock()">Blocca stanza</button>
-<button id="restartBtn" onclick="restartGame()" style="display:none;">Nuova partita</button>
+    <div style="display:flex; gap:24px; align-items:center; justify-content:center; flex-wrap:wrap; margin-top:16px;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <div id="qrcode" style="background:var(--paper); padding:12px; border-radius:var(--radius); display:inline-block;"></div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <p style="margin:0; font-weight:600; opacity:.7;">Link per entrare</p>
+            <button id="copyLinkBtn" class="btn btn-on-dark" onclick="copyLink()" style="display:none;">Copia link</button>
+        </div>
+    </div>
+
+    <div style="display:flex; gap:12px; margin-top:20px;">
+        <button id="lockBtn" class="btn btn-on-dark" onclick="toggleLock()">Blocca stanza</button>
+        <button id="playBtn" class="btn btn-accent" onclick="openPlayScreen()" style="display:none;">GIOCA</button>
+    </div>
+
+    <div class="card" style="width:95%; max-width:900px; margin-top:20px; min-height:60px;">
+        <p style="margin:0 0 12px; font-weight:600; opacity:.7;">Giocatori</p>
+        <div id="players" style="display:flex; flex-wrap:wrap; gap:8px;">
+            <p style="margin:0; opacity:.6;">Nessun giocatore ancora</p>
+        </div>
+    </div>
+
+
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
     let currentPin = null;
 
-    function createRoom(){
-        socket.emit('host-create-room');
-    }
+    // NUOVO: se arriva un PIN nell'URL, ci ricolleghiamo a quella stanza invece di crearne una nuova
+    const urlParams = new URLSearchParams(window.location.search);
+    const pinFromUrl = urlParams.get('pin');
 
-    socket.on('room-created', ({pin}) =>{
+    socket.on('connect', () => {
+        if (pinFromUrl) {
+            socket.emit('host-rejoin', { pin: pinFromUrl });
+        } else {
+            socket.emit('host-create-room'); // NUOVO: creazione automatica, niente più bottone
+        }
+    });
+
+    function setupRoomUI(pin) {
         currentPin = pin;
-        document.getElementById('pin').innerText = 'PIN: ' + pin;
+        document.getElementById('pin').innerText = pin;
 
-        // NUOVO: genera il QR code che punta alla pagina player con il PIN già compilato
         const joinUrl = window.location.origin + '/player.html?pin=' + pin + '&ngrok-skip-browser-warning=true';
-        document.getElementById('qrcode').innerHTML = ''; // pulisce eventuale QR precedente
+        currentJoinUrl = joinUrl;
+
+        document.getElementById('qrcode').innerHTML = '';
         new QRCode(document.getElementById('qrcode'), joinUrl);
 
-        document.getElementById('joinLinkText').innerText = joinUrl;
         document.getElementById('copyLinkBtn').style.display = 'inline-block';
+        document.getElementById('playBtn').style.display = 'inline-block';
+    }
+
+    socket.on('room-created', ({pin}) => {
+        setupRoomUI(pin);
+    });
+
+    // NUOVO: ripristina la UI quando torniamo alla lobby dopo un restart
+    socket.on('host-rejoin-success', ({ pin, locked, players }) => {
+        setupRoomUI(pin);
+        document.getElementById('lockBtn').innerText = locked ? 'Sblocca stanza' : 'Blocca stanza';
+        document.getElementById('players').innerText = 'Giocatori: ' + players.join(', ');
     });
 
     function copyLink() {
-        const link = document.getElementById('joinLinkText').innerText;
+        let currentJoinUrl = '';
+        const link = document.getElementById(currentJoinUrl).innerText;
         navigator.clipboard.writeText(link).then(() => {
             document.getElementById('copyLinkBtn').innerText = 'Copiato!';
             setTimeout(() => {
@@ -52,38 +92,6 @@
             }, 2000);
         });
     }
-
-    function nextQuestion() {
-        socket.emit('host-next-question', { pin: currentPin });
-    }
-
-    socket.on('player-list-update', (players) => {
-        document.getElementById('players').innerText = 'Giocatori: ' + players.join(', ');
-    });
-
-    socket.on('answer-count-update', ({ totalAnswers, totalPlayers }) => {
-        document.getElementById('answerCount').innerText =
-            'Risposte: ' + totalAnswers + '/' + totalPlayers;
-    });
-
-    socket.on('game-over', (leaderboard) => {
-        const html = '<h2>Classifica finale</h2>' +
-            leaderboard.map((p, i) =>
-                '<p>' + (i + 1) + '. ' + p.nickname + ' — ' + p.score + ' punti</p>'
-            ).join('');
-        document.getElementById('leaderboard').innerHTML = html;
-        document.getElementById('restartBtn').style.display = 'inline-block';
-    });
-
-    function restartGame() {
-        socket.emit('host-restart-game', { pin: currentPin });
-    }
-
-    socket.on('game-restarted', () => {
-        document.getElementById('leaderboard').innerHTML = '';
-        document.getElementById('restartBtn').style.display = 'none';
-        document.getElementById('answerCount').innerText = '';
-    });
 
     function toggleLock() {
         socket.emit('host-toggle-lock', { pin: currentPin });
@@ -93,7 +101,45 @@
         document.getElementById('lockBtn').innerText = locked ? 'Sblocca stanza' : 'Blocca stanza';
     });
 
-</script>
+    let renderedPlayers = [];
 
+    socket.on('player-list-update', (players) => {
+        const playersContainer = document.getElementById('players');
+
+        if (players.length === 0) {
+            playersContainer.innerHTML = '<p style="margin:0; opacity:.6;">Nessun giocatore ancora</p>';
+            renderedPlayers = [];
+            return;
+        }
+
+        if (renderedPlayers.length === 0) {
+            playersContainer.innerHTML = '';
+        }
+
+        // NUOVO: rimuove i rettangoli dei giocatori che non sono più connessi
+        document.querySelectorAll('.player-chip').forEach(chip => {
+            if (!players.includes(chip.dataset.nickname)) {
+                chip.remove();
+            }
+        });
+
+        // Aggiunge solo i rettangoli dei giocatori nuovi
+        players.forEach(name => {
+            if (!renderedPlayers.includes(name)) {
+                const chip = document.createElement('div');
+                chip.className = 'player-chip';
+                chip.dataset.nickname = name;
+                chip.innerText = name;
+                playersContainer.appendChild(chip);
+            }
+        });
+
+        renderedPlayers = players;
+    });
+
+    function openPlayScreen() {
+        window.open(window.location.origin + '/play.html?pin=' + currentPin, '_blank');
+    }
+</script>
 </body>
 </html>
