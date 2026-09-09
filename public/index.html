@@ -1,21 +1,13 @@
 <!DOCTYPE html>
 <html lang="it">
-<head><meta charset="UTF-8"><title>Test Socket.IO</title></head>
+<head><meta charset="UTF-8"><title>Quiz</title></head>
 <body>
-
 <h1>Benvenuto nel quiz</h1>
 
 <a href="/host.html" target="_blank">Crea una partita (Host)</a>
 <br>
 <a href="/player.html" target="_blank">Entra in una partita (Giocatore)</a>
-
-<script src="/socket.io/socket.io.js"></script>
-<script>
-    const socket = io();
-
-    socket.on('connect', () => {
-        document.getElementById('status').innerText = 'Connesso al server! ID: ' + socket.id;
-    });
-</script>
+<br>
+<a href="/questions.html" target="_blank">Gestisci domande</a>
 </body>
 </html>

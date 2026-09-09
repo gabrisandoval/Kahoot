@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><title>Aggiungi domande</title></head>
+<body>
+<h1 id="formTitle">Aggiungi una domanda</h1>
+
+<input id="questionInput" placeholder="Testo della domanda"><br>
+<input id="option0" placeholder="Opzione 1"><br>
+<input id="option1" placeholder="Opzione 2"><br>
+<input id="option2" placeholder="Opzione 3"><br>
+<input id="option3" placeholder="Opzione 4"><br>
+<input id="correctIndex" type="number" placeholder="Indice risposta corretta (0-3)"><br>
+<input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15"><br>
+<button onclick="saveQuestion()">Salva domanda</button>
+<button id="cancelBtn" onclick="cancelEdit()" style="display:none;">Annulla modifica</button>
+
+<p id="message"></p>
+
+<h2>Domande salvate</h2>
+<div id="questionList"></div>
+
+<script>
+    let editingId = null;
+    let currentQuestions = [];
+
+    async function saveQuestion() {
+        const question = document.getElementById('questionInput').value.trim();
+        const options = [
+            document.getElementById('option0').value.trim(),
+            document.getElementById('option1').value.trim(),
+            document.getElementById('option2').value.trim(),
+            document.getElementById('option3').value.trim()
+        ];
+        const correctIndex = parseInt(document.getElementById('correctIndex').value);
+        const timeLimit = parseInt(document.getElementById('timeLimit').value);
+
+        if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
+            document.getElementById('message').innerText = 'Compila tutti i campi';
+            return;
+        }
+
+        const body = JSON.stringify({ question, options, correctIndex, timeLimit });
+
+        if (editingId) {
+            await fetch('/api/questions/' + editingId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body
+            });
+            document.getElementById('message').innerText = 'Domanda modificata!';
+            cancelEdit();
+        } else {
+            await fetch('/api/questions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body
+            });
+            document.getElementById('message').innerText = 'Domanda salvata!';
+            clearForm();
+        }
+
+        loadQuestionList();
+    }
+
+    function clearForm() {
+        document.getElementById('questionInput').value = '';
+        document.getElementById('option0').value = '';
+        document.getElementById('option1').value = '';
+        document.getElementById('option2').value = '';
+        document.getElementById('option3').value = '';
+        document.getElementById('correctIndex').value = '';
+        document.getElementById('timeLimit').value = '15';
+    }
+
+    function editQuestion(id) {
+        const q = currentQuestions.find(q => q.id === id);
+        if (!q) return;
+
+        editingId = q.id;
+        document.getElementById('questionInput').value = q.question;
+        document.getElementById('option0').value = q.options[0];
+        document.getElementById('option1').value = q.options[1];
+        document.getElementById('option2').value = q.options[2];
+        document.getElementById('option3').value = q.options[3];
+        document.getElementById('correctIndex').value = q.correctIndex;
+        document.getElementById('timeLimit').value = q.timeLimit;
+
+        document.getElementById('formTitle').innerText = 'Modifica domanda';
+        document.getElementById('cancelBtn').style.display = 'inline-block';
+    }
+
+    function cancelEdit() {
+        editingId = null;
+        clearForm();
+        document.getElementById('formTitle').innerText = 'Aggiungi una domanda';
+        document.getElementById('cancelBtn').style.display = 'none';
+    }
+
+    async function deleteQuestion(id) {
+        if (!confirm('Eliminare questa domanda?')) return;
+        await fetch('/api/questions/' + id, { method: 'DELETE' });
+        loadQuestionList();
+    }
+
+    async function loadQuestionList() {
+        const res = await fetch('/api/questions');
+        currentQuestions = await res.json();
+
+        document.getElementById('questionList').innerHTML = currentQuestions.map(q =>
+            '<div style="margin-bottom:10px;">' +
+            '<span>' + q.question + '</span> ' +
+            '<button onclick="editQuestion(\'' + q.id + '\')">Modifica</button> ' +
+            '<button onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
+            '</div>'
+        ).join('');
+    }
+
+    loadQuestionList();
+</script>
+</body>
+</html>
