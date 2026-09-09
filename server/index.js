@@ -84,7 +84,8 @@ io.on('connection', (socket) => {
             hostSocketId: socket.id,
             players: {},
             currentQuestionIndex: -1,
-            answers: {}
+            answers: {},
+            locked: false
         };
 
         socket.join(pin);
@@ -98,6 +99,11 @@ io.on('connection', (socket) => {
 
         if (!room) {
             socket.emit('join-error', 'Stanza non trovata');
+            return;
+        }
+
+        if (room.locked) {
+            socket.emit('join-error', 'La stanza è chiusa, non è più possibile entrare');
             return;
         }
 
@@ -115,6 +121,8 @@ io.on('connection', (socket) => {
     socket.on('host-next-question', ({ pin }) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
+
+        room.locked = true;
 
         const QUESTIONS = loadQuestions();
 
@@ -175,12 +183,21 @@ io.on('connection', (socket) => {
 
         room.currentQuestionIndex = -1;
         room.answers = {};
+        room.locked = false; // NUOVO: riapri la stanza per nuovi giocatori
 
-        // Azzera il punteggio di tutti i giocatori
         Object.values(room.players).forEach(p => p.score = 0);
 
         console.log('Partita riavviata nella stanza', pin);
         io.to(pin).emit('game-restarted');
+    });
+
+    socket.on('host-toggle-lock', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room || room.hostSocketId !== socket.id) return;
+
+        room.locked = !room.locked;
+        console.log('Stanza', pin, room.locked ? 'bloccata' : 'sbloccata');
+        socket.emit('lock-status-update', { locked: room.locked });
     });
 
     socket.on('disconnect', () => {
@@ -194,5 +211,7 @@ function generatePin() {
 
 const PORT = 3000;
 server.listen(PORT, () => {
-    console.log(`Server avviato su http://localhost:${PORT}`);
+    //console.log(`Server avviato su http://localhost:${PORT}`);
+    console.log(`Server avviato su https://reunite-gray-reaffirm.ngrok-free.dev/index.html`);
+
 });

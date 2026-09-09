@@ -22,5 +22,17 @@
     "correctIndex": 0,
     "timeLimit": 15,
     "id": "1788964545297"
+  },
+  {
+    "question": "Chi ha cantato 'Crazy in Love'?",
+    "options": [
+      "Rihanna",
+      "Beyonce",
+      "Jennifer Lopez",
+      "Alicia Keys"
+    ],
+    "correctIndex": 1,
+    "timeLimit": 15,
+    "id": "1788970431146"
   }
 ]

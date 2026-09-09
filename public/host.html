@@ -3,15 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <title>HOST</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 <h1>Crea una partita</h1>
 <button onclick="createRoom()">Crea una stanza</button>
 <h2 id="pin"></h2>
+
+<div id="qrcode"></div>
+<p id="joinLinkText"></p>
+<button id="copyLinkBtn" onclick="copyLink()" style="display:none;">Copia link</button>
+
 <p id="players"></p>
 <button onclick="nextQuestion()">Invia prossima domanda</button>
 <p id="answerCount"></p>
 <div id="leaderboard"></div>
+<button id="lockBtn" onclick="toggleLock()">Blocca stanza</button>
 <button id="restartBtn" onclick="restartGame()" style="display:none;">Nuova partita</button>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -26,7 +33,25 @@
     socket.on('room-created', ({pin}) =>{
         currentPin = pin;
         document.getElementById('pin').innerText = 'PIN: ' + pin;
+
+        // NUOVO: genera il QR code che punta alla pagina player con il PIN già compilato
+        const joinUrl = window.location.origin + '/player.html?pin=' + pin + '&ngrok-skip-browser-warning=true';
+        document.getElementById('qrcode').innerHTML = ''; // pulisce eventuale QR precedente
+        new QRCode(document.getElementById('qrcode'), joinUrl);
+
+        document.getElementById('joinLinkText').innerText = joinUrl;
+        document.getElementById('copyLinkBtn').style.display = 'inline-block';
     });
+
+    function copyLink() {
+        const link = document.getElementById('joinLinkText').innerText;
+        navigator.clipboard.writeText(link).then(() => {
+            document.getElementById('copyLinkBtn').innerText = 'Copiato!';
+            setTimeout(() => {
+                document.getElementById('copyLinkBtn').innerText = 'Copia link';
+            }, 2000);
+        });
+    }
 
     function nextQuestion() {
         socket.emit('host-next-question', { pin: currentPin });
@@ -47,17 +72,25 @@
                 '<p>' + (i + 1) + '. ' + p.nickname + ' — ' + p.score + ' punti</p>'
             ).join('');
         document.getElementById('leaderboard').innerHTML = html;
-        document.getElementById('restartBtn').style.display = 'inline-block'; // NUOVO
+        document.getElementById('restartBtn').style.display = 'inline-block';
     });
 
-    function restartGame() { // NUOVO
+    function restartGame() {
         socket.emit('host-restart-game', { pin: currentPin });
     }
 
-    socket.on('game-restarted', () => { // NUOVO
+    socket.on('game-restarted', () => {
         document.getElementById('leaderboard').innerHTML = '';
         document.getElementById('restartBtn').style.display = 'none';
         document.getElementById('answerCount').innerText = '';
+    });
+
+    function toggleLock() {
+        socket.emit('host-toggle-lock', { pin: currentPin });
+    }
+
+    socket.on('lock-status-update', ({ locked }) => {
+        document.getElementById('lockBtn').innerText = locked ? 'Sblocca stanza' : 'Blocca stanza';
     });
 
 </script>
