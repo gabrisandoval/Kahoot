@@ -50,9 +50,9 @@
         document.getElementById('question').innerHTML += '<p>Risposta inviata!</p>';
     }
 
-    socket.on('answer-result', ({ correct }) => {
+    socket.on('answer-result', ({ correct, points }) => {
         document.getElementById('question').innerHTML +=
-            correct ? '<p>Corretto!</p>' : '<p>Sbagliato</p>';
+            correct ? '<p>Corretto! +' + points + ' punti</p>' : '<p>Sbagliato</p>';
     });
 </script>
 </body>

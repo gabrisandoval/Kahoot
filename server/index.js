@@ -14,7 +14,8 @@ const QUESTIONS = [
     {
         question: 'Qual è la capitale d\'Italia?',
         options: ['Milano', 'Roma', 'Napoli', 'Torino'],
-        correctIndex: 1
+        correctIndex: 1,
+        timeLimit: 15      //secondi
     }
 ];
 
@@ -41,7 +42,7 @@ io.on('connection', (socket) => {
         socket.emit('room-created', { pin });
     });
 
-    // Un giocatore entra nella stanza
+    // Un giocatore entra nella stanza + aggiungi il punteggio
     socket.on('player-join', ({ pin, nickname }) => {
         const room = rooms[pin];
 
@@ -50,17 +51,17 @@ io.on('connection', (socket) => {
             return;
         }
 
-        room.players[socket.id] = nickname;
+        room.players[socket.id] = { nickname, score: 0 };
         socket.join(pin);
         console.log(`${nickname} è entrato nella stanza ${pin}`);
 
         socket.emit('join-success', { pin, nickname });
 
-        const playerNames = Object.values(room.players);
+        const playerNames = Object.values(room.players).map(p => p.nickname);
         io.to(room.hostSocketId).emit('player-list-update', playerNames);
     });
 
-    // L'host invia la prossima domanda
+    // L'host invia la prossima domanda, salvato orario di invio della domanda
     socket.on('host-next-question', ({ pin }) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
@@ -74,26 +75,39 @@ io.on('connection', (socket) => {
         }
 
         room.answers = {};
+        room.questionStartTime = Date.now(); // NUOVO
 
         io.to(pin).emit('new-question', {
             question: q.question,
-            options: q.options
+            options: q.options,
+            timeLimit: q.timeLimit // NUOVO
         });
     });
 
-    // Un giocatore risponde
+    // Un giocatore risponde, punteggio valutato in base al tempo di risposta
     socket.on('submit-answer', ({ pin, answerIndex }) => {
         const room = rooms[pin];
         if (!room) return;
 
         if (room.answers[socket.id] !== undefined) return;
 
+        // calcola quanti secondi ha impiegato a rispondere
+        const timeTaken = (Date.now() - room.questionStartTime) / 1000;
         room.answers[socket.id] = answerIndex;
 
         const q = QUESTIONS[room.currentQuestionIndex];
         const isCorrect = answerIndex === q.correctIndex;
 
-        socket.emit('answer-result', { correct: isCorrect });
+        let points = 0;
+        if (isCorrect) {
+            // NUOVO: 500 punti base + fino a 500 di bonus velocità
+            const speedBonus = Math.max(0, q.timeLimit - timeTaken) / q.timeLimit;
+            points = Math.round(500 + 500 * speedBonus);
+            room.players[socket.id].score += points;
+        }
+
+        // punti aggiunti
+        socket.emit('answer-result', { correct: isCorrect, points });
 
         const totalPlayers = Object.keys(room.players).length;
         const totalAnswers = Object.keys(room.answers).length;
