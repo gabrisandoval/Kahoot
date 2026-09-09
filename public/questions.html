@@ -3,15 +3,34 @@
 <head><meta charset="UTF-8"><title>Aggiungi domande</title></head>
 <body>
 <h1 id="formTitle">Aggiungi una domanda</h1>
+<a href="/index.html"><button>← Torna alla home</button></a>
+
+<br><br>
+
+<label>Tipo di domanda:</label>
+<select id="questionType" onchange="toggleQuestionType()">
+    <option value="multiple">Risposta multipla</option>
+    <option value="truefalse">Vero o Falso</option>
+</select>
+<br><br>
 
 <input id="questionInput" placeholder="Testo della domanda"><br>
 
-<input type="radio" name="correctOption" value="0"> <input id="option0" placeholder="Opzione 1"><br>
-<input type="radio" name="correctOption" value="1"> <input id="option1" placeholder="Opzione 2"><br>
-<input type="radio" name="correctOption" value="2"> <input id="option2" placeholder="Opzione 3"><br>
-<input type="radio" name="correctOption" value="3"> <input id="option3" placeholder="Opzione 4"><br>
+<!-- Campi per risposta multipla -->
+<div id="multipleOptions">
+    <input type="radio" name="correctOption" value="0"> <input id="option0" placeholder="Opzione 1"><br>
+    <input type="radio" name="correctOption" value="1"> <input id="option1" placeholder="Opzione 2"><br>
+    <input type="radio" name="correctOption" value="2"> <input id="option2" placeholder="Opzione 3"><br>
+    <input type="radio" name="correctOption" value="3"> <input id="option3" placeholder="Opzione 4"><br>
+    <p style="font-size: 0.9em; color: gray;">Seleziona il pallino accanto alla risposta corretta</p>
+</div>
 
-<p style="font-size: 0.9em; color: gray;">Seleziona il pallino accanto alla risposta corretta</p>
+<!-- NUOVO: campi per vero/falso -->
+<div id="trueFalseOptions" style="display:none;">
+    <input type="radio" name="tfCorrectOption" value="0"> Vero<br>
+    <input type="radio" name="tfCorrectOption" value="1"> Falso<br>
+    <p style="font-size: 0.9em; color: gray;">Seleziona la risposta corretta</p>
+</div>
 
 <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15"><br>
 <button onclick="saveQuestion()">Salva domanda</button>
@@ -20,29 +39,41 @@
 <p id="message"></p>
 
 <h2>Domande salvate</h2>
-<a href="/index.html"><button>← Torna alla home</button></a>
 <div id="questionList"></div>
-
-
 
 <script>
     let editingId = null;
     let currentQuestions = [];
 
+    // NUOVO: mostra/nasconde i campi giusti in base al tipo scelto
+    function toggleQuestionType() {
+        const type = document.getElementById('questionType').value;
+        document.getElementById('multipleOptions').style.display = (type === 'multiple') ? 'block' : 'none';
+        document.getElementById('trueFalseOptions').style.display = (type === 'truefalse') ? 'block' : 'none';
+    }
+
     async function saveQuestion() {
+        const type = document.getElementById('questionType').value;
         const question = document.getElementById('questionInput').value.trim();
-        const options = [
-            document.getElementById('option0').value.trim(),
-            document.getElementById('option1').value.trim(),
-            document.getElementById('option2').value.trim(),
-            document.getElementById('option3').value.trim()
-        ];
-
-        // NUOVO: leggiamo quale radio button è selezionato
-        const selected = document.querySelector('input[name="correctOption"]:checked');
-        const correctIndex = selected ? parseInt(selected.value) : NaN;
-
         const timeLimit = parseInt(document.getElementById('timeLimit').value);
+
+        let options, correctIndex;
+
+        if (type === 'truefalse') {
+            // NUOVO: per vero/falso, le opzioni sono fisse
+            options = ['Vero', 'Falso'];
+            const selected = document.querySelector('input[name="tfCorrectOption"]:checked');
+            correctIndex = selected ? parseInt(selected.value) : NaN;
+        } else {
+            options = [
+                document.getElementById('option0').value.trim(),
+                document.getElementById('option1').value.trim(),
+                document.getElementById('option2').value.trim(),
+                document.getElementById('option3').value.trim()
+            ];
+            const selected = document.querySelector('input[name="correctOption"]:checked');
+            correctIndex = selected ? parseInt(selected.value) : NaN;
+        }
 
         if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
             document.getElementById('message').innerText = 'Compila tutti i campi e seleziona la risposta corretta';
@@ -79,9 +110,11 @@
         document.getElementById('option2').value = '';
         document.getElementById('option3').value = '';
         document.getElementById('timeLimit').value = '15';
+        document.getElementById('questionType').value = 'multiple'; // NUOVO
+        toggleQuestionType(); // NUOVO
 
-        // NUOVO: deseleziona tutti i radio button
         document.querySelectorAll('input[name="correctOption"]').forEach(r => r.checked = false);
+        document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => r.checked = false); // NUOVO
     }
 
     function editQuestion(id) {
@@ -90,16 +123,28 @@
 
         editingId = q.id;
         document.getElementById('questionInput').value = q.question;
-        document.getElementById('option0').value = q.options[0];
-        document.getElementById('option1').value = q.options[1];
-        document.getElementById('option2').value = q.options[2];
-        document.getElementById('option3').value = q.options[3];
         document.getElementById('timeLimit').value = q.timeLimit;
 
-        // NUOVO: seleziona il radio button giusto in base al correctIndex salvato
-        document.querySelectorAll('input[name="correctOption"]').forEach(r => {
-            r.checked = (parseInt(r.value) === q.correctIndex);
-        });
+        // NUOVO: rileva se è una domanda vero/falso guardando le opzioni salvate
+        const isTrueFalse = q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso';
+
+        if (isTrueFalse) {
+            document.getElementById('questionType').value = 'truefalse';
+            toggleQuestionType();
+            document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => {
+                r.checked = (parseInt(r.value) === q.correctIndex);
+            });
+        } else {
+            document.getElementById('questionType').value = 'multiple';
+            toggleQuestionType();
+            document.getElementById('option0').value = q.options[0];
+            document.getElementById('option1').value = q.options[1];
+            document.getElementById('option2').value = q.options[2];
+            document.getElementById('option3').value = q.options[3];
+            document.querySelectorAll('input[name="correctOption"]').forEach(r => {
+                r.checked = (parseInt(r.value) === q.correctIndex);
+            });
+        }
 
         document.getElementById('formTitle').innerText = 'Modifica domanda';
         document.getElementById('cancelBtn').style.display = 'inline-block';

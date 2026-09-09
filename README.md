@@ -20,3 +20,5 @@ CREAZIONE BASE DI KAHOOT: DONE
 Aggiunte:
 9. Pagina per aggiungere/eliminare/modificare domande(salvate su file)
 10. Reset Game
+11. Add T/F Questions
+12. Add QR Code and link to play
