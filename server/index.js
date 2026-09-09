@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -9,15 +10,64 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Domande di esempio
-const QUESTIONS = [
-    {
-        question: 'Qual è la capitale d\'Italia?',
-        options: ['Milano', 'Roma', 'Napoli', 'Torino'],
-        correctIndex: 1,
-        timeLimit: 15      //secondi
-    }
-];
+const QUESTIONS_FILE = path.join(__dirname, 'questions.json');
+
+function loadQuestions() {
+    const data = fs.readFileSync(QUESTIONS_FILE, 'utf-8');
+    return JSON.parse(data);
+}
+
+function saveQuestion(newQuestion) {
+    const questions = loadQuestions();
+    newQuestion.id = Date.now().toString(); // NUOVO: id unico basato sul timestamp
+    questions.push(newQuestion);
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
+}
+
+// NUOVO: elimina una domanda tramite id
+function deleteQuestion(id) {
+    const questions = loadQuestions();
+    const filtered = questions.filter(q => q.id !== id);
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(filtered, null, 2));
+}
+
+// NUOVO: modifica una domanda esistente
+function updateQuestion(id, updatedFields) {
+    const questions = loadQuestions();
+    const index = questions.findIndex(q => q.id === id);
+    if (index === -1) return false;
+
+    questions[index] = { ...questions[index], ...updatedFields, id };
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
+    return true;
+}
+
+app.use(express.json()); // NUOVO: per leggere dati JSON dal form
+
+// Restituisce tutte le domande salvate
+app.get('/api/questions', (req, res) => {
+    res.json(loadQuestions());
+});
+
+//elimina una domanda
+app.delete('/api/questions/:id', (req, res) => {
+    deleteQuestion(req.params.id);
+    res.json({ success: true });
+});
+
+// modifica una domanda
+app.put('/api/questions/:id', (req, res) => {
+    const { question, options, correctIndex, timeLimit } = req.body;
+    const success = updateQuestion(req.params.id, { question, options, correctIndex, timeLimit });
+    res.json({ success });
+});
+
+// Aggiunge una nuova domanda
+app.post('/api/questions', (req, res) => {
+    const { question, options, correctIndex, timeLimit } = req.body;
+    saveQuestion({ question, options, correctIndex, timeLimit });
+    res.json({ success: true });
+});
 
 // Memoria delle stanze attive
 // rooms[pin] = { hostSocketId, players: {}, currentQuestionIndex, answers: {} }
@@ -66,13 +116,14 @@ io.on('connection', (socket) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
 
+        const QUESTIONS = loadQuestions();
+
         room.currentQuestionIndex++;
         const q = QUESTIONS[room.currentQuestionIndex];
 
         if (!q) {
-            // NUOVO: costruiamo la classifica finale e la mandiamo a tutti
             const leaderboard = Object.values(room.players)
-                .sort((a, b) => b.score - a.score) // ordina dal punteggio più alto
+                .sort((a, b) => b.score - a.score)
                 .map(p => ({ nickname: p.nickname, score: p.score }));
 
             io.to(pin).emit('game-over', leaderboard);
@@ -96,22 +147,20 @@ io.on('connection', (socket) => {
 
         if (room.answers[socket.id] !== undefined) return;
 
-        // calcola quanti secondi ha impiegato a rispondere
         const timeTaken = (Date.now() - room.questionStartTime) / 1000;
         room.answers[socket.id] = answerIndex;
 
+        const QUESTIONS = loadQuestions(); // NUOVO
         const q = QUESTIONS[room.currentQuestionIndex];
         const isCorrect = answerIndex === q.correctIndex;
 
         let points = 0;
         if (isCorrect) {
-            // NUOVO: 500 punti base + fino a 500 di bonus velocità
             const speedBonus = Math.max(0, q.timeLimit - timeTaken) / q.timeLimit;
             points = Math.round(500 + 500 * speedBonus);
             room.players[socket.id].score += points;
         }
 
-        // punti aggiunti
         socket.emit('answer-result', { correct: isCorrect, points });
 
         const totalPlayers = Object.keys(room.players).length;

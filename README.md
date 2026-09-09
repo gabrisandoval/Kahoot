@@ -14,3 +14,8 @@
 6. I giocatori rispondono — il server calcola chi ha risposto
 7. Calcolo punteggio — con bonus velocità
 8. Classifica finale
+
+CREAZIONE BASE DI KAHOOT: DONE
+
+Aggiunte:
+9. Pagina per aggiungere/eliminare/modificare domande(salvate su file)
