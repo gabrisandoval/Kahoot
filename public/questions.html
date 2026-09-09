@@ -1,51 +1,58 @@
 <!DOCTYPE html>
 <html lang="it">
-<head><meta charset="UTF-8"><title>Aggiungi domande</title></head>
-<body>
-<h1 id="formTitle">Aggiungi una domanda</h1>
-<a href="/index.html"><button>← Torna alla home</button></a>
+<head>
+    <meta charset="UTF-8">
+    <title>Aggiungi domande</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body style="background:var(--paper-dim);">
+<div style="max-width:560px; margin:0 auto; padding:32px 20px;">
+    <a href="/index.html"><button class="btn">← Torna alla home</button></a>
 
-<br><br>
+    <div class="card" style="margin-top:20px;">
+        <h1 id="formTitle" style="font-family:var(--font-display); margin-top:0;">Aggiungi una domanda</h1>
 
-<label>Tipo di domanda:</label>
-<select id="questionType" onchange="toggleQuestionType()">
-    <option value="multiple">Risposta multipla</option>
-    <option value="truefalse">Vero o Falso</option>
-</select>
-<br><br>
+        <label style="font-weight:600;">Tipo di domanda</label>
+        <select id="questionType" onchange="toggleQuestionType()" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin:8px 0 16px; font-family:var(--font-body);">
+            <option value="multiple">Risposta multipla</option>
+            <option value="truefalse">Vero o Falso</option>
+        </select>
 
-<input id="questionInput" placeholder="Testo della domanda"><br>
+        <input id="questionInput" placeholder="Testo della domanda" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:12px; font-family:var(--font-body);">
 
-<!-- Campi per risposta multipla -->
-<div id="multipleOptions">
-    <input type="radio" name="correctOption" value="0"> <input id="option0" placeholder="Opzione 1"><br>
-    <input type="radio" name="correctOption" value="1"> <input id="option1" placeholder="Opzione 2"><br>
-    <input type="radio" name="correctOption" value="2"> <input id="option2" placeholder="Opzione 3"><br>
-    <input type="radio" name="correctOption" value="3"> <input id="option3" placeholder="Opzione 4"><br>
-    <p style="font-size: 0.9em; color: gray;">Seleziona il pallino accanto alla risposta corretta</p>
+        <div id="multipleOptions">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="0"><input id="option0" placeholder="Opzione 1" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--coral);"></div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="1"><input id="option1" placeholder="Opzione 2" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--blue);"></div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="2"><input id="option2" placeholder="Opzione 3" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--amber);"></div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="3"><input id="option3" placeholder="Opzione 4" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--green);"></div>
+            <p style="font-size:13px; opacity:.7;">Seleziona il pallino accanto alla risposta corretta</p>
+        </div>
+
+        <div id="trueFalseOptions" style="display:none; margin-bottom:12px;">
+            <label style="display:block; margin-bottom:6px;"><input type="radio" name="tfCorrectOption" value="0"> Vero</label>
+            <label style="display:block;"><input type="radio" name="tfCorrectOption" value="1"> Falso</label>
+        </div>
+
+        <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:16px; font-family:var(--font-body);">
+
+        <div style="display:flex; gap:12px;">
+            <button class="btn btn-accent" onclick="saveQuestion()">Salva domanda</button>
+            <button id="cancelBtn" class="btn" onclick="cancelEdit()" style="display:none;">Annulla modifica</button>
+        </div>
+
+        <p id="message" style="color:var(--coral); font-weight:600;"></p>
+    </div>
+
+    <h2 style="font-family:var(--font-display); margin-top:32px;">Domande salvate</h2>
+    <div id="questionList"></div>
 </div>
-
-<!-- NUOVO: campi per vero/falso -->
-<div id="trueFalseOptions" style="display:none;">
-    <input type="radio" name="tfCorrectOption" value="0"> Vero<br>
-    <input type="radio" name="tfCorrectOption" value="1"> Falso<br>
-    <p style="font-size: 0.9em; color: gray;">Seleziona la risposta corretta</p>
-</div>
-
-<input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15"><br>
-<button onclick="saveQuestion()">Salva domanda</button>
-<button id="cancelBtn" onclick="cancelEdit()" style="display:none;">Annulla modifica</button>
-
-<p id="message"></p>
-
-<h2>Domande salvate</h2>
-<div id="questionList"></div>
 
 <script>
     let editingId = null;
     let currentQuestions = [];
 
-    // NUOVO: mostra/nasconde i campi giusti in base al tipo scelto
     function toggleQuestionType() {
         const type = document.getElementById('questionType').value;
         document.getElementById('multipleOptions').style.display = (type === 'multiple') ? 'block' : 'none';
@@ -60,7 +67,6 @@
         let options, correctIndex;
 
         if (type === 'truefalse') {
-            // NUOVO: per vero/falso, le opzioni sono fisse
             options = ['Vero', 'Falso'];
             const selected = document.querySelector('input[name="tfCorrectOption"]:checked');
             correctIndex = selected ? parseInt(selected.value) : NaN;
@@ -110,11 +116,11 @@
         document.getElementById('option2').value = '';
         document.getElementById('option3').value = '';
         document.getElementById('timeLimit').value = '15';
-        document.getElementById('questionType').value = 'multiple'; // NUOVO
-        toggleQuestionType(); // NUOVO
+        document.getElementById('questionType').value = 'multiple';
+        toggleQuestionType();
 
         document.querySelectorAll('input[name="correctOption"]').forEach(r => r.checked = false);
-        document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => r.checked = false); // NUOVO
+        document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => r.checked = false);
     }
 
     function editQuestion(id) {
@@ -125,7 +131,6 @@
         document.getElementById('questionInput').value = q.question;
         document.getElementById('timeLimit').value = q.timeLimit;
 
-        // NUOVO: rileva se è una domanda vero/falso guardando le opzioni salvate
         const isTrueFalse = q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso';
 
         if (isTrueFalse) {
@@ -168,10 +173,12 @@
         currentQuestions = await res.json();
 
         document.getElementById('questionList').innerHTML = currentQuestions.map(q =>
-            '<div style="margin-bottom:10px;">' +
-            '<span>' + q.question + ' (corretta: ' + q.options[q.correctIndex] + ')</span> ' +
-            '<button onclick="editQuestion(\'' + q.id + '\')">Modifica</button> ' +
-            '<button onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
+            '<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:16px;">' +
+            '<span>' + q.question + ' <strong style="color:var(--green);">(' + q.options[q.correctIndex] + ')</strong></span>' +
+            '<span style="display:flex; gap:8px;">' +
+            '<button class="btn" onclick="editQuestion(\'' + q.id + '\')">Modifica</button>' +
+            '<button class="btn" onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
+            '</span>' +
             '</div>'
         ).join('');
     }

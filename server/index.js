@@ -109,6 +109,7 @@ io.on('connection', (socket) => {
 
         room.players[socket.id] = { nickname, score: 0 };
         socket.join(pin);
+        socket.data.pin = pin; // NUOVO: ci serve per rimuoverlo alla disconnessione
         console.log(`${nickname} è entrato nella stanza ${pin}`);
 
         socket.emit('join-success', { pin, nickname });
@@ -200,8 +201,30 @@ io.on('connection', (socket) => {
         socket.emit('lock-status-update', { locked: room.locked });
     });
 
+    // NUOVO: la pagina di gioco (play.html) reclama il controllo della stanza
+    socket.on('host-rejoin', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room) return;
+
+        room.hostSocketId = socket.id;
+        socket.join(pin);
+
+        const playerNames = Object.values(room.players).map(p => p.nickname);
+        socket.emit('host-rejoin-success', { pin, locked: room.locked, players: playerNames });
+    });
+
     socket.on('disconnect', () => {
         console.log('Client disconnesso:', socket.id);
+
+        const pin = socket.data.pin;
+        const room = rooms[pin];
+        if (!room) return;
+
+        if (room.players[socket.id]) {
+            delete room.players[socket.id];
+            const playerNames = Object.values(room.players).map(p => p.nickname);
+            io.to(room.hostSocketId).emit('player-list-update', playerNames);
+        }
     });
 });
 

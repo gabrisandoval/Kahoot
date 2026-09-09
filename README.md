@@ -22,3 +22,4 @@ Aggiunte:
 10. Reset Game
 11. Add T/F Questions
 12. Add QR Code and link to play
+13. Add CSS, gestione liste fantasma

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Gioco in corso</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="stage">
+
+  <div id="questionScreen" style="display:none; width:100%;">
+    <h1 id="questionText" style="font-family:var(--font-display); font-size:clamp(24px,5vw,40px); max-width:800px; margin:0 auto 24px;"></h1>
+    <div class="options-grid" id="optionsLegend" style="max-width:700px; margin:0 auto; min-height:200px;"></div>
+    <p id="answerCount" style="margin-top:20px; opacity:.85;"></p>
+    <button class="btn btn-on-dark" onclick="nextQuestion()" style="margin-top:20px;">Prossima domanda</button>
+  </div>
+
+  <div id="resultsScreen" style="display:none; width:100%; max-width:480px;">
+    <h1 style="font-family:var(--font-display);">Classifica finale</h1>
+    <div id="leaderboard"></div>
+    <button class="btn btn-on-dark" onclick="restartGame()" style="margin-top:20px;">Nuova partita</button>
+  </div>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentPin = urlParams.get('pin');
+  const shapes = ['▲', '◆', '●', '■'];
+
+  socket.emit('host-rejoin', { pin: currentPin });
+
+  // NUOVO: appena il controllo della stanza è confermato, parte subito la prima domanda
+  socket.on('host-rejoin-success', () => {
+    nextQuestion();
+  });
+
+  function nextQuestion() {
+    socket.emit('host-next-question', { pin: currentPin });
+  }
+
+  function restartGame() {
+    socket.emit('host-restart-game', { pin: currentPin });
+  }
+
+  socket.on('new-question', ({ question, options }) => {
+    document.getElementById('resultsScreen').style.display = 'none';
+    document.getElementById('questionScreen').style.display = 'block';
+    document.getElementById('questionText').innerText = question;
+    document.getElementById('optionsLegend').innerHTML = options.map((o, i) =>
+            '<div class="option-btn option-' + i + '" style="cursor:default;"><span class="shape">' + shapes[i] + '</span>' + o + '</div>'
+    ).join('');
+    document.getElementById('answerCount').innerText = '';
+  });
+
+  socket.on('answer-count-update', ({ totalAnswers, totalPlayers }) => {
+    document.getElementById('answerCount').innerText = 'Risposte: ' + totalAnswers + '/' + totalPlayers;
+  });
+
+  socket.on('game-over', (leaderboard) => {
+    document.getElementById('questionScreen').style.display = 'none';
+    document.getElementById('resultsScreen').style.display = 'block';
+    document.getElementById('leaderboard').innerHTML = leaderboard.map((p, i) =>
+            '<div class="leaderboard-row"><span>' + (i + 1) + '. ' + p.nickname + '</span><span>' + p.score + ' punti</span></div>'
+    ).join('');
+  });
+
+  // NUOVO: dopo il restart, torna alla lobby con lo stesso PIN (QR e link restano validi)
+  socket.on('game-restarted', () => {
+    window.location.href = '/host.html?pin=' + currentPin;
+  });
+</script>
+</body>
+</html>
