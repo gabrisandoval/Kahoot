@@ -62,6 +62,10 @@
             ).join('');
         document.getElementById('question').innerHTML = html;
     });
+
+    socket.on('game-restarted', () => { // NUOVO
+        document.getElementById('question').innerHTML = '<p>In attesa che l\'host inizi una nuova partita...</p>';
+    });
 </script>
 </body>
 </html>

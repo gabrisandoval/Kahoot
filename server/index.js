@@ -168,6 +168,21 @@ io.on('connection', (socket) => {
         io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
     });
 
+    // NUOVO: l'host riavvia la partita nella stessa stanza
+    socket.on('host-restart-game', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room || room.hostSocketId !== socket.id) return;
+
+        room.currentQuestionIndex = -1;
+        room.answers = {};
+
+        // Azzera il punteggio di tutti i giocatori
+        Object.values(room.players).forEach(p => p.score = 0);
+
+        console.log('Partita riavviata nella stanza', pin);
+        io.to(pin).emit('game-restarted');
+    });
+
     socket.on('disconnect', () => {
         console.log('Client disconnesso:', socket.id);
     });

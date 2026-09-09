@@ -19,3 +19,4 @@ CREAZIONE BASE DI KAHOOT: DONE
 
 Aggiunte:
 9. Pagina per aggiungere/eliminare/modificare domande(salvate su file)
+10. Reset Game

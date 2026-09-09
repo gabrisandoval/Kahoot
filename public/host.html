@@ -12,6 +12,7 @@
 <button onclick="nextQuestion()">Invia prossima domanda</button>
 <p id="answerCount"></p>
 <div id="leaderboard"></div>
+<button id="restartBtn" onclick="restartGame()" style="display:none;">Nuova partita</button>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -46,6 +47,17 @@
                 '<p>' + (i + 1) + '. ' + p.nickname + ' — ' + p.score + ' punti</p>'
             ).join('');
         document.getElementById('leaderboard').innerHTML = html;
+        document.getElementById('restartBtn').style.display = 'inline-block'; // NUOVO
+    });
+
+    function restartGame() { // NUOVO
+        socket.emit('host-restart-game', { pin: currentPin });
+    }
+
+    socket.on('game-restarted', () => { // NUOVO
+        document.getElementById('leaderboard').innerHTML = '';
+        document.getElementById('restartBtn').style.display = 'none';
+        document.getElementById('answerCount').innerText = '';
     });
 
 </script>
