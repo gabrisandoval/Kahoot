@@ -9,30 +9,51 @@
 <button onclick="joinRoom()">Entra</button>
 
 <p id="message"></p>
+<div id="question"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  const socket = io();
+    const socket = io();
+    let currentPin = null;
 
-  function joinRoom() {
-    const pin = document.getElementById('pinInput').value.trim();
-    const nickname = document.getElementById('nicknameInput').value.trim();
+    function joinRoom() {
+        const pin = document.getElementById('pinInput').value.trim();
+        const nickname = document.getElementById('nicknameInput').value.trim();
 
-    if (!pin || !nickname) {
-      document.getElementById('message').innerText = 'Inserisci PIN e nome';
-      return;
+        if (!pin || !nickname) {
+            document.getElementById('message').innerText = 'Inserisci PIN e nome';
+            return;
+        }
+
+        socket.emit('player-join', { pin, nickname });
     }
 
-    socket.emit('player-join', { pin, nickname });
-  }
+    socket.on('join-success', ({ pin, nickname }) => {
+        currentPin = pin;
+        document.getElementById('message').innerText = 'Benvenuto ' + nickname + '! Sei entrato nella stanza.';
+    });
 
-  socket.on('join-success', ({ nickname }) => {
-    document.getElementById('message').innerText = 'Benvenuto ' + nickname + '! Sei entrato nella stanza.';
-  });
+    socket.on('join-error', (msg) => {
+        document.getElementById('message').innerText = msg;
+    });
 
-  socket.on('join-error', (msg) => {
-    document.getElementById('message').innerText = msg;
-  });
+    socket.on('new-question', ({ question, options }) => {
+        const html = '<h2>' + question + '</h2>' +
+            options.map((o, i) =>
+                '<button onclick="submitAnswer(' + i + ')">' + o + '</button>'
+            ).join('');
+        document.getElementById('question').innerHTML = html;
+    });
+
+    function submitAnswer(index) {
+        socket.emit('submit-answer', { pin: currentPin, answerIndex: index });
+        document.getElementById('question').innerHTML += '<p>Risposta inviata!</p>';
+    }
+
+    socket.on('answer-result', ({ correct }) => {
+        document.getElementById('question').innerHTML +=
+            correct ? '<p>Corretto!</p>' : '<p>Sbagliato</p>';
+    });
 </script>
 </body>
 </html>

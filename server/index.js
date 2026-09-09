@@ -9,27 +9,39 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// NUOVO: memoria delle stanze attive
-// rooms[pin] = { hostSocketId, players: { socketId: nickname } }
+// Domande di esempio
+const QUESTIONS = [
+    {
+        question: 'Qual è la capitale d\'Italia?',
+        options: ['Milano', 'Roma', 'Napoli', 'Torino'],
+        correctIndex: 1
+    }
+];
+
+// Memoria delle stanze attive
+// rooms[pin] = { hostSocketId, players: {}, currentQuestionIndex, answers: {} }
 const rooms = {};
 
 io.on('connection', (socket) => {
     console.log('Nuovo client connesso:', socket.id);
 
+    // L'host crea una nuova stanza
     socket.on('host-create-room', () => {
         const pin = generatePin();
 
-        // NUOVO: salviamo la stanza in memoria
         rooms[pin] = {
             hostSocketId: socket.id,
-            players: {}
+            players: {},
+            currentQuestionIndex: -1,
+            answers: {}
         };
 
+        socket.join(pin);
         console.log('Stanza creata con PIN:', pin);
         socket.emit('room-created', { pin });
     });
 
-    // NUOVO: un giocatore prova a entrare in una stanza
+    // Un giocatore entra nella stanza
     socket.on('player-join', ({ pin, nickname }) => {
         const room = rooms[pin];
 
@@ -39,13 +51,53 @@ io.on('connection', (socket) => {
         }
 
         room.players[socket.id] = nickname;
+        socket.join(pin);
         console.log(`${nickname} è entrato nella stanza ${pin}`);
 
         socket.emit('join-success', { pin, nickname });
 
-        // Avvisiamo l'host che un nuovo giocatore è entrato
         const playerNames = Object.values(room.players);
         io.to(room.hostSocketId).emit('player-list-update', playerNames);
+    });
+
+    // L'host invia la prossima domanda
+    socket.on('host-next-question', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room || room.hostSocketId !== socket.id) return;
+
+        room.currentQuestionIndex++;
+        const q = QUESTIONS[room.currentQuestionIndex];
+
+        if (!q) {
+            console.log('Domande finite');
+            return;
+        }
+
+        room.answers = {};
+
+        io.to(pin).emit('new-question', {
+            question: q.question,
+            options: q.options
+        });
+    });
+
+    // Un giocatore risponde
+    socket.on('submit-answer', ({ pin, answerIndex }) => {
+        const room = rooms[pin];
+        if (!room) return;
+
+        if (room.answers[socket.id] !== undefined) return;
+
+        room.answers[socket.id] = answerIndex;
+
+        const q = QUESTIONS[room.currentQuestionIndex];
+        const isCorrect = answerIndex === q.correctIndex;
+
+        socket.emit('answer-result', { correct: isCorrect });
+
+        const totalPlayers = Object.keys(room.players).length;
+        const totalAnswers = Object.keys(room.answers).length;
+        io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
     });
 
     socket.on('disconnect', () => {

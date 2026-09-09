@@ -5,31 +5,40 @@
     <title>HOST</title>
 </head>
 <body>
-  <h1>Crea una partita</h1>
-  <button onclick="createRoom()">Crea una stanza</button>
-  <h2 id="pin"></h2>
-  <p id="players"></p>
+<h1>Crea una partita</h1>
+<button onclick="createRoom()">Crea una stanza</button>
+<h2 id="pin"></h2>
+<p id="players"></p>
+<button onclick="nextQuestion()">Invia prossima domanda</button>
+<p id="answerCount"></p>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
     const socket = io();
-
-    /* Il client chiede qualcosa al server con emit, il service risponde con un altro emit,
-     e il client ascolta quella risposta con on. */
+    let currentPin = null;
 
     function createRoom(){
-      socket.emit('host-create-room');
+        socket.emit('host-create-room');
     }
 
-    socket.on('room created', ({pin}) =>{
-      document.getElementById('pin').innerText = 'PIN' + pin;
+    socket.on('room-created', ({pin}) =>{
+        currentPin = pin;
+        document.getElementById('pin').innerText = 'PIN: ' + pin;
     });
+
+    function nextQuestion() {
+        socket.emit('host-next-question', { pin: currentPin });
+    }
 
     socket.on('player-list-update', (players) => {
         document.getElementById('players').innerText = 'Giocatori: ' + players.join(', ');
     });
-  </script>
+
+    socket.on('answer-count-update', ({ totalAnswers, totalPlayers }) => {
+        document.getElementById('answerCount').innerText =
+            'Risposte: ' + totalAnswers + '/' + totalPlayers;
+    });
+</script>
 
 </body>
 </html>
-
