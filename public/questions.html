@@ -5,11 +5,14 @@
 <h1 id="formTitle">Aggiungi una domanda</h1>
 
 <input id="questionInput" placeholder="Testo della domanda"><br>
-<input id="option0" placeholder="Opzione 1"><br>
-<input id="option1" placeholder="Opzione 2"><br>
-<input id="option2" placeholder="Opzione 3"><br>
-<input id="option3" placeholder="Opzione 4"><br>
-<input id="correctIndex" type="number" placeholder="Indice risposta corretta (0-3)"><br>
+
+<input type="radio" name="correctOption" value="0"> <input id="option0" placeholder="Opzione 1"><br>
+<input type="radio" name="correctOption" value="1"> <input id="option1" placeholder="Opzione 2"><br>
+<input type="radio" name="correctOption" value="2"> <input id="option2" placeholder="Opzione 3"><br>
+<input type="radio" name="correctOption" value="3"> <input id="option3" placeholder="Opzione 4"><br>
+
+<p style="font-size: 0.9em; color: gray;">Seleziona il pallino accanto alla risposta corretta</p>
+
 <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15"><br>
 <button onclick="saveQuestion()">Salva domanda</button>
 <button id="cancelBtn" onclick="cancelEdit()" style="display:none;">Annulla modifica</button>
@@ -17,7 +20,10 @@
 <p id="message"></p>
 
 <h2>Domande salvate</h2>
+<a href="/index.html"><button>← Torna alla home</button></a>
 <div id="questionList"></div>
+
+
 
 <script>
     let editingId = null;
@@ -31,11 +37,15 @@
             document.getElementById('option2').value.trim(),
             document.getElementById('option3').value.trim()
         ];
-        const correctIndex = parseInt(document.getElementById('correctIndex').value);
+
+        // NUOVO: leggiamo quale radio button è selezionato
+        const selected = document.querySelector('input[name="correctOption"]:checked');
+        const correctIndex = selected ? parseInt(selected.value) : NaN;
+
         const timeLimit = parseInt(document.getElementById('timeLimit').value);
 
         if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
-            document.getElementById('message').innerText = 'Compila tutti i campi';
+            document.getElementById('message').innerText = 'Compila tutti i campi e seleziona la risposta corretta';
             return;
         }
 
@@ -68,8 +78,10 @@
         document.getElementById('option1').value = '';
         document.getElementById('option2').value = '';
         document.getElementById('option3').value = '';
-        document.getElementById('correctIndex').value = '';
         document.getElementById('timeLimit').value = '15';
+
+        // NUOVO: deseleziona tutti i radio button
+        document.querySelectorAll('input[name="correctOption"]').forEach(r => r.checked = false);
     }
 
     function editQuestion(id) {
@@ -82,8 +94,12 @@
         document.getElementById('option1').value = q.options[1];
         document.getElementById('option2').value = q.options[2];
         document.getElementById('option3').value = q.options[3];
-        document.getElementById('correctIndex').value = q.correctIndex;
         document.getElementById('timeLimit').value = q.timeLimit;
+
+        // NUOVO: seleziona il radio button giusto in base al correctIndex salvato
+        document.querySelectorAll('input[name="correctOption"]').forEach(r => {
+            r.checked = (parseInt(r.value) === q.correctIndex);
+        });
 
         document.getElementById('formTitle').innerText = 'Modifica domanda';
         document.getElementById('cancelBtn').style.display = 'inline-block';
@@ -108,7 +124,7 @@
 
         document.getElementById('questionList').innerHTML = currentQuestions.map(q =>
             '<div style="margin-bottom:10px;">' +
-            '<span>' + q.question + '</span> ' +
+            '<span>' + q.question + ' (corretta: ' + q.options[q.correctIndex] + ')</span> ' +
             '<button onclick="editQuestion(\'' + q.id + '\')">Modifica</button> ' +
             '<button onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
             '</div>'
