@@ -54,6 +54,14 @@
         document.getElementById('question').innerHTML +=
             correct ? '<p>Corretto! +' + points + ' punti</p>' : '<p>Sbagliato</p>';
     });
+
+    socket.on('game-over', (leaderboard) => {
+        const html = '<h2>Partita finita!</h2>' +
+            leaderboard.map((p, i) =>
+                '<p>' + (i + 1) + '. ' + p.nickname + ' — ' + p.score + ' punti</p>'
+            ).join('');
+        document.getElementById('question').innerHTML = html;
+    });
 </script>
 </body>
 </html>

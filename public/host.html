@@ -11,6 +11,7 @@
 <p id="players"></p>
 <button onclick="nextQuestion()">Invia prossima domanda</button>
 <p id="answerCount"></p>
+<div id="leaderboard"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -38,6 +39,15 @@
         document.getElementById('answerCount').innerText =
             'Risposte: ' + totalAnswers + '/' + totalPlayers;
     });
+
+    socket.on('game-over', (leaderboard) => {
+        const html = '<h2>Classifica finale</h2>' +
+            leaderboard.map((p, i) =>
+                '<p>' + (i + 1) + '. ' + p.nickname + ' — ' + p.score + ' punti</p>'
+            ).join('');
+        document.getElementById('leaderboard').innerHTML = html;
+    });
+
 </script>
 
 </body>

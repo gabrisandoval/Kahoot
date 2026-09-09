@@ -70,17 +70,22 @@ io.on('connection', (socket) => {
         const q = QUESTIONS[room.currentQuestionIndex];
 
         if (!q) {
-            console.log('Domande finite');
+            // NUOVO: costruiamo la classifica finale e la mandiamo a tutti
+            const leaderboard = Object.values(room.players)
+                .sort((a, b) => b.score - a.score) // ordina dal punteggio più alto
+                .map(p => ({ nickname: p.nickname, score: p.score }));
+
+            io.to(pin).emit('game-over', leaderboard);
             return;
         }
 
         room.answers = {};
-        room.questionStartTime = Date.now(); // NUOVO
+        room.questionStartTime = Date.now();
 
         io.to(pin).emit('new-question', {
             question: q.question,
             options: q.options,
-            timeLimit: q.timeLimit // NUOVO
+            timeLimit: q.timeLimit
         });
     });
 
