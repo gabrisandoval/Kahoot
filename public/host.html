@@ -10,6 +10,9 @@
 </head>
 <body>
 <div class="stage">
+
+    <audio id="lobbyMusic" src="lobby.mp3" loop></audio>
+
     <h1 style="font-family:var(--font-display);">Lobby partita</h1>
 
     <div class="pin-display" id="pin"></div>
@@ -26,6 +29,7 @@
     </div>
 
     <div style="display:flex; gap:12px; margin-top:20px;">
+        <a href="/index.html"><button class="btn btn-on-dark" style="position:absolute; top:20px; left:20px;">← Home</button></a>
         <button id="lockBtn" class="btn btn-on-dark" onclick="toggleLock()">Blocca stanza</button>
         <button id="playBtn" class="btn btn-accent" onclick="openPlayScreen()" style="display:none;">GIOCA</button>
     </div>
@@ -72,6 +76,7 @@
     }
 
     socket.on('room-created', ({pin}) => {
+        playLobbyMusic();
         setupRoomUI(pin);
     });
 
@@ -80,6 +85,7 @@
         setupRoomUI(pin);
         document.getElementById('lockBtn').innerText = locked ? 'Sblocca stanza' : 'Blocca stanza';
         document.getElementById('players').innerText = 'Giocatori: ' + players.join(', ');
+        playLobbyMusic()
     });
 
     function copyLink() {
@@ -137,9 +143,27 @@
         renderedPlayers = players;
     });
 
-    function openPlayScreen() {
-        window.open(window.location.origin + '/play.html?pin=' + currentPin, '_blank');
+    function playLobbyMusic() {
+        const music = document.getElementById('lobbyMusic');
+        music.currentTime = 0;
+        music.play().catch(err => console.log('Musica non avviata:', err));
     }
+
+    function stopLobbyMusic() {
+        const music = document.getElementById('lobbyMusic');
+        music.pause();
+        music.currentTime = 0;
+    }
+
+    function openPlayScreen() {
+        if (renderedPlayers.length === 0) {
+            alert('Serve almeno un giocatore connesso per iniziare');
+            return;
+        }
+        stopLobbyMusic();
+        window.location.href = window.location.origin + '/play.html?pin=' + currentPin;
+    }
+
 </script>
 </body>
 </html>

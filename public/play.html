@@ -10,11 +10,27 @@
 <body>
 <div class="stage">
 
+  <audio id="bgMusic" src="game.mp3"></audio>
+
   <div id="questionScreen" style="display:none; width:100%;">
     <h1 id="questionText" style="font-family:var(--font-display); font-size:clamp(24px,5vw,40px); max-width:800px; margin:0 auto 24px;"></h1>
     <div class="options-grid" id="optionsLegend" style="max-width:700px; margin:0 auto; min-height:200px;"></div>
-    <p id="answerCount" style="margin-top:20px; opacity:.85;"></p>
-    <button class="btn btn-on-dark" onclick="nextQuestion()" style="margin-top:20px;">Prossima domanda</button>
+    <p id="answerCount" style="margin-top:24px; font-family:var(--font-display); font-size:clamp(20px,4vw,32px); opacity:.9;"></p>
+    <div style="display:flex; gap:12px; justify-content:center; margin-top:20px;">
+      <button id="advanceBtn" class="btn btn-on-dark" onclick="advance()">Mostra classifica</button>
+      <button class="btn" onclick="stopGame()" style="background:var(--coral); border-color:var(--coral); color:var(--ink);">Stop</button>
+    </div>
+  </div>
+
+  <div id="timerDisplay" style="font-family:var(--font-display); font-size:clamp(48px,10vw,90px); font-weight:700; margin-top:16px;"></div>
+
+  <div id="scoreboardScreen" style="display:none; width:100%; max-width:520px;">
+    <h1 style="font-family:var(--font-display);">Classifica</h1>
+    <div id="scoreboardList"></div>
+    <div style="display:flex; gap:12px; justify-content:center; margin-top:20px;">
+      <button class="btn btn-accent" onclick="nextQuestion()">Prossima domanda</button>
+      <button class="btn" onclick="stopGame()" style="background:var(--coral); border-color:var(--coral); color:var(--ink);">Stop</button>
+    </div>
   </div>
 
   <div id="resultsScreen" style="display:none; width:100%; max-width:480px;">
@@ -34,7 +50,6 @@
 
   socket.emit('host-rejoin', { pin: currentPin });
 
-  // NUOVO: appena il controllo della stanza è confermato, parte subito la prima domanda
   socket.on('host-rejoin-success', () => {
     nextQuestion();
   });
@@ -43,33 +58,148 @@
     socket.emit('host-next-question', { pin: currentPin });
   }
 
+  // NUOVO: il bottone in fondo alla domanda chiede la classifica invece di avanzare subito
+  function advance() {
+    clearInterval();
+    stopMusic();
+    socket.emit('host-show-scoreboard', { pin: currentPin });
+  }
+
   function restartGame() {
     socket.emit('host-restart-game', { pin: currentPin });
   }
 
-  socket.on('new-question', ({ question, options }) => {
+  let countdownInterval = null;
+
+  socket.on('new-question', ({ question, options, totalPlayers, imageData, timeLimit }) => {
+    clearInterval();
+    playMusic();
+    document.querySelectorAll('#questionScreen img').forEach(img => img.remove());
+    document.getElementById('scoreboardScreen').style.display = 'none';
     document.getElementById('resultsScreen').style.display = 'none';
     document.getElementById('questionScreen').style.display = 'block';
     document.getElementById('questionText').innerText = question;
+
+    const imgHtml = imageData
+            ? '<img src="' + imageData + '" style="max-width:400px; max-height:300px; border-radius:var(--radius); margin:0 auto 20px; display:block;">'
+            : '';
+    document.getElementById('questionText').insertAdjacentHTML('afterend', imgHtml);
+
     document.getElementById('optionsLegend').innerHTML = options.map((o, i) =>
             '<div class="option-btn option-' + i + '" style="cursor:default;"><span class="shape">' + shapes[i] + '</span>' + o + '</div>'
     ).join('');
-    document.getElementById('answerCount').innerText = '';
+    document.getElementById('answerCount').innerText = '0/' + totalPlayers;
+
+    startCountdown(timeLimit); // NUOVO
   });
+
+  // NUOVO: gestisce il countdown visibile
+  function startCountdown(seconds) {
+    clearInterval(countdownInterval);
+    let remaining = seconds;
+    document.getElementById('timerDisplay').innerText = remaining;
+
+    countdownInterval = setInterval(() => {
+      remaining--;
+      document.getElementById('timerDisplay').innerText = remaining > 0 ? remaining : '0';
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+      }
+    }, 1000);
+  }
 
   socket.on('answer-count-update', ({ totalAnswers, totalPlayers }) => {
-    document.getElementById('answerCount').innerText = 'Risposte: ' + totalAnswers + '/' + totalPlayers;
+    document.getElementById('answerCount').innerText = totalAnswers + '/' + totalPlayers;
   });
 
-  socket.on('game-over', (leaderboard) => {
+  // NUOVO: riceve la classifica intermedia e la mostra con animazione di sorpasso
+  socket.on('scoreboard-update', (leaderboard) => {
+    clearInterval(countdownInterval); // NUOVO: ferma il countdown
+    document.getElementById('timerDisplay').innerText = ''; // NUOVO: pulisce il numero visibile
     document.getElementById('questionScreen').style.display = 'none';
+    document.getElementById('scoreboardScreen').style.display = 'block';
+    renderScoreboardWithAnimation(leaderboard);
+  });
+
+  // NUOVO: tecnica FLIP per animare il riordino delle righe
+  function renderScoreboardWithAnimation(leaderboard) {
+    const container = document.getElementById('scoreboardList');
+
+    // 1. Memorizza la posizione attuale di ogni riga esistente
+    const oldPositions = {};
+    container.querySelectorAll('.leaderboard-row').forEach(row => {
+      oldPositions[row.dataset.nick] = row.getBoundingClientRect().top;
+    });
+
+    // 2. Ricostruisce/riordina le righe in base al nuovo punteggio
+    leaderboard.forEach(p => {
+      let row = container.querySelector('[data-nick="' + p.nickname + '"]');
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'leaderboard-row';
+        row.dataset.nick = p.nickname;
+        row.style.opacity = '0';
+      }
+      row.innerHTML = '<span class="player-name">' + p.nickname + '</span><span class="player-score">' + p.score + '</span>';
+      container.appendChild(row); // append nell'ordine giusto sposta la riga nella posizione corretta
+    });
+
+    // 3. Calcola lo spostamento e anima dalla vecchia posizione alla nuova
+    container.querySelectorAll('.leaderboard-row').forEach(row => {
+      const newTop = row.getBoundingClientRect().top;
+      const oldTop = oldPositions[row.dataset.nick];
+
+      if (oldTop !== undefined) {
+        const delta = oldTop - newTop;
+        row.style.transition = 'none';
+        row.style.transform = 'translateY(' + delta + 'px)';
+        requestAnimationFrame(() => {
+          row.style.transition = 'transform 0.6s ease';
+          row.style.transform = 'translateY(0)';
+        });
+      } else {
+        requestAnimationFrame(() => {
+          row.style.transition = 'opacity 0.5s ease';
+          row.style.opacity = '1';
+        });
+      }
+    });
+  }
+
+  socket.on('game-over', (leaderboard) => {
+    clearInterval(countdownInterval); // NUOVO
+    document.getElementById('timerDisplay').innerText = ''; // NUOVO
+    document.getElementById('questionScreen').style.display = 'none';
+    document.getElementById('scoreboardScreen').style.display = 'none';
     document.getElementById('resultsScreen').style.display = 'block';
-    document.getElementById('leaderboard').innerHTML = leaderboard.map((p, i) =>
-            '<div class="leaderboard-row"><span>' + (i + 1) + '. ' + p.nickname + '</span><span>' + p.score + ' punti</span></div>'
+    document.getElementById('leaderboard').innerHTML = leaderboard.map(p =>
+            '<div class="leaderboard-row"><span class="player-name">' + p.nickname + '</span><span class="player-score">' + p.score + '</span></div>'
     ).join('');
   });
 
-  // NUOVO: dopo il restart, torna alla lobby con lo stesso PIN (QR e link restano validi)
+  function stopGame() {
+    if (confirm('Interrompere la partita e tornare alla lobby?')) {
+      stopMusic();
+      socket.emit('host-stop-game', { pin: currentPin });
+    }
+  }
+
+  socket.on('game-stopped', () => {
+    window.location.href = '/host.html?pin=' + currentPin;
+  });
+
+  function playMusic() {
+    const music = document.getElementById('bgMusic');
+    music.currentTime = 0;
+    music.play().catch(err => console.log('Musica non avviata:', err));
+  }
+
+  function stopMusic() {
+    const music = document.getElementById('bgMusic');
+    music.pause();
+    music.currentTime = 0;
+  }
+
   socket.on('game-restarted', () => {
     window.location.href = '/host.html?pin=' + currentPin;
   });

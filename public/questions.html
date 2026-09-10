@@ -18,9 +18,15 @@
         <select id="questionType" onchange="toggleQuestionType()" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin:8px 0 16px; font-family:var(--font-body);">
             <option value="multiple">Risposta multipla</option>
             <option value="truefalse">Vero o Falso</option>
+            <option value="image">Immagine</option>
         </select>
 
         <input id="questionInput" placeholder="Testo della domanda" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:12px; font-family:var(--font-body);">
+
+        <div id="imageUploadField" style="display:none; margin-bottom:12px;">
+            <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
+            <img id="imagePreview" style="max-width:100%; max-height:200px; margin-top:10px; display:none; border-radius:var(--radius);">
+        </div>
 
         <div id="multipleOptions">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="0"><input id="option0" placeholder="Opzione 1" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--coral);"></div>
@@ -35,7 +41,7 @@
             <label style="display:block;"><input type="radio" name="tfCorrectOption" value="1"> Falso</label>
         </div>
 
-        <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:16px; font-family:var(--font-body);">
+        <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="10" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:16px; font-family:var(--font-body);">
 
         <div style="display:flex; gap:12px;">
             <button class="btn btn-accent" onclick="saveQuestion()">Salva domanda</button>
@@ -45,18 +51,24 @@
         <p id="message" style="color:var(--coral); font-weight:600;"></p>
     </div>
 
-    <h2 style="font-family:var(--font-display); margin-top:32px;">Domande salvate</h2>
+    <h2 style="font-family:var(--font-display); margin-top:32px;">Domande salvate (<span id="questionCount">0</span>)</h2>
+    <div style="display:flex; gap:12px; margin-bottom:16px;">
+        <button class="btn" onclick="toggleAll(true)">Attiva tutte</button>
+        <button class="btn" onclick="toggleAll(false)">Disattiva tutte</button>
+    </div>
     <div id="questionList"></div>
 </div>
 
 <script>
     let editingId = null;
     let currentQuestions = [];
+    let draggedId = null;
 
     function toggleQuestionType() {
         const type = document.getElementById('questionType').value;
-        document.getElementById('multipleOptions').style.display = (type === 'multiple') ? 'block' : 'none';
+        document.getElementById('multipleOptions').style.display = (type === 'multiple' || type === 'image') ? 'block' : 'none';
         document.getElementById('trueFalseOptions').style.display = (type === 'truefalse') ? 'block' : 'none';
+        document.getElementById('imageUploadField').style.display = (type === 'image') ? 'block' : 'none';
     }
 
     async function saveQuestion() {
@@ -81,12 +93,23 @@
             correctIndex = selected ? parseInt(selected.value) : NaN;
         }
 
+        // NUOVO: per le domande immagine, serve una foto caricata
+        if (type === 'image' && !currentImageData) {
+            document.getElementById('message').innerText = 'Carica un\'immagine';
+            return;
+        }
+
         if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
             document.getElementById('message').innerText = 'Compila tutti i campi e seleziona la risposta corretta';
             return;
         }
 
-        const body = JSON.stringify({ question, options, correctIndex, timeLimit });
+        const questionData = { question, options, correctIndex, timeLimit };
+        if (type === 'image') {
+            questionData.imageData = currentImageData; // NUOVO
+        }
+
+        const body = JSON.stringify(questionData);
 
         if (editingId) {
             await fetch('/api/questions/' + editingId, {
@@ -133,7 +156,21 @@
 
         const isTrueFalse = q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso';
 
-        if (isTrueFalse) {
+        if (q.imageData) {
+            // NUOVO: domanda di tipo immagine
+            document.getElementById('questionType').value = 'image';
+            toggleQuestionType();
+            currentImageData = q.imageData;
+            document.getElementById('imagePreview').src = q.imageData;
+            document.getElementById('imagePreview').style.display = 'block';
+            document.getElementById('option0').value = q.options[0];
+            document.getElementById('option1').value = q.options[1];
+            document.getElementById('option2').value = q.options[2];
+            document.getElementById('option3').value = q.options[3];
+            document.querySelectorAll('input[name="correctOption"]').forEach(r => {
+                r.checked = (parseInt(r.value) === q.correctIndex);
+            });
+        } else if (isTrueFalse) {
             document.getElementById('questionType').value = 'truefalse';
             toggleQuestionType();
             document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => {
@@ -172,15 +209,104 @@
         const res = await fetch('/api/questions');
         currentQuestions = await res.json();
 
-        document.getElementById('questionList').innerHTML = currentQuestions.map(q =>
-            '<div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:16px;">' +
-            '<span>' + q.question + ' <strong style="color:var(--green);">(' + q.options[q.correctIndex] + ')</strong></span>' +
-            '<span style="display:flex; gap:8px;">' +
-            '<button class="btn" onclick="editQuestion(\'' + q.id + '\')">Modifica</button>' +
-            '<button class="btn" onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
-            '</span>' +
-            '</div>'
-        ).join('');
+        document.getElementById('questionCount').innerText = currentQuestions.filter(q => q.enabled !== false).length;
+
+        document.getElementById('questionList').innerHTML = currentQuestions.map(q => {
+            const isEnabled = q.enabled !== false; // NUOVO: attiva di default se il campo non esiste
+            return '<div class="card" data-id="' + q.id + '" ' +
+                'style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:16px;' + (isEnabled ? '' : ' opacity:.5;') + '">' +
+                '<span style="display:flex; align-items:center; gap:10px;">' +
+                '<input type="checkbox" ' + (isEnabled ? 'checked' : '') + ' onchange="toggleEnabled(\'' + q.id + '\', this.checked)" style="width:20px; height:20px; cursor:pointer;">' +
+                '<span draggable="true" class="drag-handle" style="cursor:grab; opacity:.4; font-size:20px; user-select:none;">☰</span>' +
+                '<span>' + q.question + ' <strong style="color:var(--green);">(' + q.options[q.correctIndex] + ')</strong></span>' +
+                '</span>' +
+                '<span style="display:flex; gap:8px;">' +
+                '<button class="btn" onclick="editQuestion(\'' + q.id + '\')">Modifica</button>' +
+                '<button class="btn" onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
+                '</span>' +
+                '</div>';
+        }).join('');
+
+        attachDragEvents();
+    }
+
+    async function toggleEnabled(id, enabled) {
+        await fetch('/api/questions/' + id + '/toggle', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+        loadQuestionList(); // ricarica per aggiornare l'opacità e il conteggio
+    }
+
+    async function toggleAll(enabled) {
+        // NUOVO: manda una richiesta di aggiornamento per ogni domanda, in parallelo
+        await Promise.all(
+            currentQuestions.map(q =>
+                fetch('/api/questions/' + q.id + '/toggle', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                })
+            )
+        );
+        loadQuestionList();
+    }
+
+    let currentImageData = null; // NUOVO: qui teniamo l'immagine convertita in base64
+
+    function previewImage() {
+        const file = document.getElementById('imageInput').files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            currentImageData = e.target.result; // stringa base64 dell'immagine
+            const preview = document.getElementById('imagePreview');
+            preview.src = currentImageData;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function attachDragEvents() {
+        const handles = document.querySelectorAll('.drag-handle');
+
+        handles.forEach(handle => {
+            const item = handle.closest('.card');
+
+            handle.addEventListener('dragstart', () => {
+                draggedId = item.dataset.id;
+                item.style.opacity = '0.4';
+            });
+
+            handle.addEventListener('dragend', () => {
+                item.style.opacity = '1';
+            });
+        });
+
+        document.querySelectorAll('#questionList .card').forEach(item => {
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const dragging = document.querySelector('[data-id="' + draggedId + '"]');
+                if (dragging && dragging !== item) {
+                    const rect = item.getBoundingClientRect();
+                    const isAfter = e.clientY > rect.top + rect.height / 2;
+                    item.parentNode.insertBefore(dragging, isAfter ? item.nextSibling : item);
+                }
+            });
+
+            item.addEventListener('drop', async () => {
+                const newOrder = Array.from(document.querySelectorAll('#questionList .card'))
+                    .map(el => el.dataset.id);
+
+                await fetch('/api/questions/reorder', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderedIds: newOrder })
+                });
+            });
+        });
     }
 
     loadQuestionList();
