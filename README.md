@@ -4,6 +4,9 @@
 1. BackEnd: Node.js + Express + Socket.io
 2. FrontEnd: React
 3. Database: 
+4. Express(libreria per far funzionare il server web)
+    SERVER: Node.js + Express
+5. Ngrok = tunnel per accesso in altri dispositivi
 
 # Il piano
 1. Server Express minimo — una pagina che risponde
@@ -23,3 +26,8 @@ Aggiunte:
 11. Add T/F Questions
 12. Add QR Code and link to play
 13. Add CSS, gestione liste fantasma
+14. Add features: size message, view number of players,
+    at least 1 player playing, add new type of question
+15. add sounds
+16. gestione messaggi giocatore
+17. domande disattivate

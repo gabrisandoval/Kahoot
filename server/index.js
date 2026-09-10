@@ -19,19 +19,17 @@ function loadQuestions() {
 
 function saveQuestion(newQuestion) {
     const questions = loadQuestions();
-    newQuestion.id = Date.now().toString(); // NUOVO: id unico basato sul timestamp
+    newQuestion.id = Date.now().toString();
     questions.push(newQuestion);
     fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
 }
 
-// NUOVO: elimina una domanda tramite id
 function deleteQuestion(id) {
     const questions = loadQuestions();
     const filtered = questions.filter(q => q.id !== id);
     fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(filtered, null, 2));
 }
 
-// NUOVO: modifica una domanda esistente
 function updateQuestion(id, updatedFields) {
     const questions = loadQuestions();
     const index = questions.findIndex(q => q.id === id);
@@ -42,30 +40,62 @@ function updateQuestion(id, updatedFields) {
     return true;
 }
 
-app.use(express.json()); // NUOVO: per leggere dati JSON dal form
+function reorderQuestions(orderedIds) {
+    const questions = loadQuestions();
+    const reordered = orderedIds
+        .map(id => questions.find(q => q.id === id))
+        .filter(q => q !== undefined);
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(reordered, null, 2));
+}
+
+function toggleQuestionEnabled(id, enabled) {
+    const questions = loadQuestions();
+    const index = questions.findIndex(q => q.id === id);
+    if (index === -1) return false;
+
+    questions[index].enabled = enabled;
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
+    return true;
+}
+
+app.use(express.json({ limit: '10mb' }));
 
 // Restituisce tutte le domande salvate
 app.get('/api/questions', (req, res) => {
     res.json(loadQuestions());
 });
 
-//elimina una domanda
+// elimina una domanda
 app.delete('/api/questions/:id', (req, res) => {
     deleteQuestion(req.params.id);
     res.json({ success: true });
 });
 
-// modifica una domanda
-app.put('/api/questions/:id', (req, res) => {
-    const { question, options, correctIndex, timeLimit } = req.body;
-    const success = updateQuestion(req.params.id, { question, options, correctIndex, timeLimit });
+// salva il nuovo ordine delle domande
+app.put('/api/questions/reorder', (req, res) => {
+    const { orderedIds } = req.body;
+    reorderQuestions(orderedIds);
+    res.json({ success: true });
+});
+
+// attiva/disattiva una domanda
+app.put('/api/questions/:id/toggle', (req, res) => {
+    const { enabled } = req.body;
+    const success = toggleQuestionEnabled(req.params.id, enabled);
     res.json({ success });
 });
 
-// Aggiunge una nuova domanda
+// modifica una domanda
+app.put('/api/questions/:id', (req, res) => {
+    const { question, options, correctIndex, timeLimit, imageData } = req.body;
+    const success = updateQuestion(req.params.id, { question, options, correctIndex, timeLimit, imageData });
+    res.json({ success });
+});
+
+// aggiunge una nuova domanda
 app.post('/api/questions', (req, res) => {
-    const { question, options, correctIndex, timeLimit } = req.body;
-    saveQuestion({ question, options, correctIndex, timeLimit });
+    const { question, options, correctIndex, timeLimit, imageData } = req.body;
+    saveQuestion({ question, options, correctIndex, timeLimit, imageData });
     res.json({ success: true });
 });
 
@@ -93,7 +123,7 @@ io.on('connection', (socket) => {
         socket.emit('room-created', { pin });
     });
 
-    // Un giocatore entra nella stanza + aggiungi il punteggio
+    // Un giocatore entra nella stanza
     socket.on('player-join', ({ pin, nickname }) => {
         const room = rooms[pin];
 
@@ -109,7 +139,7 @@ io.on('connection', (socket) => {
 
         room.players[socket.id] = { nickname, score: 0 };
         socket.join(pin);
-        socket.data.pin = pin; // NUOVO: ci serve per rimuoverlo alla disconnessione
+        socket.data.pin = pin;
         console.log(`${nickname} è entrato nella stanza ${pin}`);
 
         socket.emit('join-success', { pin, nickname });
@@ -118,14 +148,14 @@ io.on('connection', (socket) => {
         io.to(room.hostSocketId).emit('player-list-update', playerNames);
     });
 
-    // L'host invia la prossima domanda, salvato orario di invio della domanda
+    // L'host invia la prossima domanda
     socket.on('host-next-question', ({ pin }) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
 
         room.locked = true;
 
-        const QUESTIONS = loadQuestions();
+        const QUESTIONS = loadQuestions().filter(q => q.enabled !== false);
 
         room.currentQuestionIndex++;
         const q = QUESTIONS[room.currentQuestionIndex];
@@ -145,11 +175,13 @@ io.on('connection', (socket) => {
         io.to(pin).emit('new-question', {
             question: q.question,
             options: q.options,
-            timeLimit: q.timeLimit
+            timeLimit: q.timeLimit,
+            totalPlayers: Object.keys(room.players).length,
+            imageData: q.imageData || null
         });
     });
 
-    // Un giocatore risponde, punteggio valutato in base al tempo di risposta
+    // Un giocatore risponde
     socket.on('submit-answer', ({ pin, answerIndex }) => {
         const room = rooms[pin];
         if (!room) return;
@@ -159,9 +191,11 @@ io.on('connection', (socket) => {
         const timeTaken = (Date.now() - room.questionStartTime) / 1000;
         room.answers[socket.id] = answerIndex;
 
-        const QUESTIONS = loadQuestions(); // NUOVO
+        const QUESTIONS = loadQuestions().filter(q => q.enabled !== false);
         const q = QUESTIONS[room.currentQuestionIndex];
-        const isCorrect = answerIndex === q.correctIndex;
+
+        const withinTime = timeTaken <= q.timeLimit;
+        const isCorrect = withinTime && answerIndex === q.correctIndex;
 
         let points = 0;
         if (isCorrect) {
@@ -177,14 +211,14 @@ io.on('connection', (socket) => {
         io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
     });
 
-    // NUOVO: l'host riavvia la partita nella stessa stanza
+    // L'host riavvia la partita nella stessa stanza
     socket.on('host-restart-game', ({ pin }) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
 
         room.currentQuestionIndex = -1;
         room.answers = {};
-        room.locked = false; // NUOVO: riapri la stanza per nuovi giocatori
+        room.locked = false;
 
         Object.values(room.players).forEach(p => p.score = 0);
 
@@ -192,6 +226,7 @@ io.on('connection', (socket) => {
         io.to(pin).emit('game-restarted');
     });
 
+    // L'host blocca/sblocca la stanza
     socket.on('host-toggle-lock', ({ pin }) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
@@ -201,7 +236,7 @@ io.on('connection', (socket) => {
         socket.emit('lock-status-update', { locked: room.locked });
     });
 
-    // NUOVO: la pagina di gioco (play.html) reclama il controllo della stanza
+    // La pagina di gioco (play.html) reclama il controllo della stanza
     socket.on('host-rejoin', ({ pin }) => {
         const room = rooms[pin];
         if (!room) return;
@@ -211,6 +246,33 @@ io.on('connection', (socket) => {
 
         const playerNames = Object.values(room.players).map(p => p.nickname);
         socket.emit('host-rejoin-success', { pin, locked: room.locked, players: playerNames });
+    });
+
+    // Mostra la classifica intermedia
+    socket.on('host-show-scoreboard', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room || room.hostSocketId !== socket.id) return;
+
+        const leaderboard = Object.values(room.players)
+            .sort((a, b) => b.score - a.score)
+            .map(p => ({ nickname: p.nickname, score: p.score }));
+
+        io.to(pin).emit('scoreboard-update', leaderboard);
+    });
+
+    // L'host interrompe il gioco e torna subito alla lobby
+    socket.on('host-stop-game', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room || room.hostSocketId !== socket.id) return;
+
+        room.currentQuestionIndex = -1;
+        room.answers = {};
+        room.locked = false;
+
+        Object.values(room.players).forEach(p => p.score = 0);
+
+        console.log('Partita interrotta nella stanza', pin);
+        io.to(pin).emit('game-stopped');
     });
 
     socket.on('disconnect', () => {
