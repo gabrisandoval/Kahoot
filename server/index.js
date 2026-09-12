@@ -177,7 +177,9 @@ io.on('connection', (socket) => {
             options: q.options,
             timeLimit: q.timeLimit,
             totalPlayers: Object.keys(room.players).length,
-            imageData: q.imageData || null
+            imageData: q.imageData || null,
+            questionNumber: room.currentQuestionIndex + 1, // la domanda corrente (1-based)
+            totalQuestions: QUESTIONS.length // totale domande attive
         });
     });
 

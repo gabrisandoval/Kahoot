@@ -6,7 +6,11 @@
 3. Database: 
 4. Express(libreria per far funzionare il server web)
     SERVER: Node.js + Express
-5. Ngrok = tunnel per accesso in altri dispositivi
+5. Ngrok = tunnel per accesso in altri dispositivi 
+
+# Attivare il progetto
+1. terminal 1:node server/index.js
+2. terminal 2: ngrok http 3000
 
 # Il piano
 1. Server Express minimo — una pagina che risponde
@@ -31,3 +35,4 @@ Aggiunte:
 15. add sounds
 16. gestione messaggi giocatore
 17. domande disattivate
+18. add mute button e volume adjustment

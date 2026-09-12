@@ -13,6 +13,11 @@
 
     <audio id="lobbyMusic" src="lobby.mp3" loop></audio>
 
+    <div style="position:fixed; top:20px; right:20px; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.1); padding:10px 16px; border-radius:var(--radius); z-index:10;">
+        <button id="muteBtn" onclick="toggleMute()" style="background:none; border:none; color:var(--paper); font-size:24px; cursor:pointer; padding:0;">🔊</button>
+        <input type="range" id="volumeSlider" min="0" max="100" value="50" oninput="setVolume(this.value)" style="width:100px;">
+    </div>
+
     <h1 style="font-family:var(--font-display);">Lobby partita</h1>
 
     <div class="pin-display" id="pin"></div>
@@ -146,6 +151,7 @@
     function playLobbyMusic() {
         const music = document.getElementById('lobbyMusic');
         music.currentTime = 0;
+        music.volume = currentVolume;
         music.play().catch(err => console.log('Musica non avviata:', err));
     }
 
@@ -153,6 +159,27 @@
         const music = document.getElementById('lobbyMusic');
         music.pause();
         music.currentTime = 0;
+    }
+
+    let isMuted = false;
+    let currentVolume = 0.5;
+
+    function toggleMute() {
+        const music = document.getElementById('lobbyMusic');
+        isMuted = !isMuted;
+        music.muted = isMuted;
+        document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+    }
+
+    function setVolume(value) {
+        currentVolume = value / 100;
+        document.getElementById('lobbyMusic').volume = currentVolume;
+
+        if (currentVolume > 0 && isMuted) {
+            isMuted = false;
+            document.getElementById('lobbyMusic').muted = false;
+            document.getElementById('muteBtn').innerText = '🔊';
+        }
     }
 
     function openPlayScreen() {

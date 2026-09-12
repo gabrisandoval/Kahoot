@@ -37,7 +37,7 @@
     "correctIndex": 2,
     "timeLimit": 10,
     "id": "1789042155708",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "There are 8 Sacraments in total",
@@ -48,7 +48,7 @@
     "correctIndex": 1,
     "timeLimit": 10,
     "id": "1789048293075",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Who's most likely to have the cp lowbat every time?",
@@ -61,7 +61,7 @@
     "correctIndex": 2,
     "timeLimit": 10,
     "id": "1789041041515",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "What is the verse of 2025 Hope Abounds theme?",
@@ -74,7 +74,7 @@
     "correctIndex": 0,
     "timeLimit": 10,
     "id": "1789042322445",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Who's most likely to be the peacekeeper in an argument?",
@@ -87,7 +87,7 @@
     "correctIndex": 1,
     "timeLimit": 10,
     "id": "1789042024746",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Saint Peter is the first pope",
@@ -98,7 +98,7 @@
     "correctIndex": 0,
     "timeLimit": 10,
     "id": "1789048366114",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Who's most likely to accidentally start drama?",
@@ -111,7 +111,7 @@
     "correctIndex": 3,
     "timeLimit": 10,
     "id": "1789041353422",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "How many books are in the Catholic Bible?",
@@ -124,7 +124,7 @@
     "correctIndex": 1,
     "timeLimit": 10,
     "id": "1789048588756",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "The priest wears the pink vest during mass 3 times every year",
@@ -135,7 +135,7 @@
     "correctIndex": 1,
     "timeLimit": 10,
     "id": "1789048748333",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Which young saint is known as \"the Little Flower\"?",
@@ -148,7 +148,7 @@
     "correctIndex": 3,
     "timeLimit": 10,
     "id": "1789048852999",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Patron saint of animals?",
@@ -161,7 +161,7 @@
     "correctIndex": 0,
     "timeLimit": 10,
     "id": "1789048976471",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "How many days are in Lent, not counting sundays?",
@@ -174,7 +174,7 @@
     "correctIndex": 1,
     "timeLimit": 10,
     "id": "1789049231652",
-    "enabled": true
+    "enabled": false
   },
   {
     "question": "Abraham led the Israelites out of Egypt",
@@ -185,6 +185,6 @@
     "correctIndex": 1,
     "timeLimit": 10,
     "id": "1789049305854",
-    "enabled": true
+    "enabled": false
   }
 ]
