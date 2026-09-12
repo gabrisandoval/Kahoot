@@ -10,10 +10,16 @@
 <body>
 <div class="stage">
 
-  <audio id="bgMusic" src="game.mp3"></audio>
+  <audio id="bgMusic" src="game.mp3" loop></audio>
+
+  <div style="position:fixed; top:20px; right:20px; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.1); padding:10px 16px; border-radius:var(--radius); z-index:10;">
+    <button id="muteBtn" onclick="toggleMute()" style="background:none; border:none; color:var(--paper); font-size:24px; cursor:pointer; padding:0;">🔊</button>
+    <input type="range" id="volumeSlider" min="0" max="100" value="50" oninput="setVolume(this.value)" style="width:100px;">
+  </div>
 
   <div id="questionScreen" style="display:none; width:100%;">
     <h1 id="questionText" style="font-family:var(--font-display); font-size:clamp(24px,5vw,40px); max-width:800px; margin:0 auto 24px;"></h1>
+    <p id="questionProgress" style="font-family:var(--font-display); font-size:clamp(16px,3vw,22px); opacity:.6; margin-bottom:8px;"></p>
     <div class="options-grid" id="optionsLegend" style="max-width:700px; margin:0 auto; min-height:200px;"></div>
     <p id="answerCount" style="margin-top:24px; font-family:var(--font-display); font-size:clamp(20px,4vw,32px); opacity:.9;"></p>
     <div style="display:flex; gap:12px; justify-content:center; margin-top:20px;">
@@ -78,6 +84,7 @@
     document.getElementById('scoreboardScreen').style.display = 'none';
     document.getElementById('resultsScreen').style.display = 'none';
     document.getElementById('questionScreen').style.display = 'block';
+    document.getElementById('questionProgress').innerText = 'Domanda ' + questionNumber + ' di ' + totalQuestions; // NUOVO
     document.getElementById('questionText').innerText = question;
 
     const imgHtml = imageData
@@ -191,6 +198,7 @@
   function playMusic() {
     const music = document.getElementById('bgMusic');
     music.currentTime = 0;
+    music.volume = currentVolume; // NUOVO
     music.play().catch(err => console.log('Musica non avviata:', err));
   }
 
@@ -198,6 +206,28 @@
     const music = document.getElementById('bgMusic');
     music.pause();
     music.currentTime = 0;
+  }
+
+  let isMuted = false;
+  let currentVolume = 0.5;
+
+  function toggleMute() {
+    const music = document.getElementById('bgMusic');
+    isMuted = !isMuted;
+    music.muted = isMuted;
+    document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
+  }
+
+  function setVolume(value) {
+    currentVolume = value / 100;
+    document.getElementById('bgMusic').volume = currentVolume;
+
+    // Se sposti lo slider sopra 0, esce automaticamente dal mute
+    if (currentVolume > 0 && isMuted) {
+      isMuted = false;
+      document.getElementById('bgMusic').muted = false;
+      document.getElementById('muteBtn').innerText = '🔊';
+    }
   }
 
   socket.on('game-restarted', () => {
