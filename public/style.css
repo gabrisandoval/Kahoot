@@ -21,16 +21,16 @@ body {
 }
 
 .stage {
-    position: relative;
-    min-height: 100vh;
-    background: var(--ink);
-    color: var(--paper);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 40px 20px;
-    text-align: center;
-    gap: 4px;
+  position: relative;
+  min-height: 100vh;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  text-align: center;
+  gap: 4px;
 }
 
 .pin-display {
