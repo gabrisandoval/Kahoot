@@ -2,8 +2,10 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Gioca</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="puzzle.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
 </head>
@@ -29,19 +31,15 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const pinFromUrl = urlParams.get('pin');
-    if (pinFromUrl) {
-        document.getElementById('pinInput').value = pinFromUrl;
-    }
+    if (pinFromUrl) document.getElementById('pinInput').value = pinFromUrl;
 
     function joinRoom() {
         const pin = document.getElementById('pinInput').value.trim();
         const nickname = document.getElementById('nicknameInput').value.trim();
-
         if (!pin || !nickname) {
             document.getElementById('message').innerText = 'Inserisci PIN e nome';
             return;
         }
-
         socket.emit('player-join', { pin, nickname });
     }
 
@@ -59,103 +57,174 @@
     });
 
     const shapes = ['▲', '◆', '●', '■'];
+    const questionEl = document.getElementById('question');
 
-    let pendingResult = null;
+    let pendingResult = null;   // risultato arrivato dal server, mostrato solo a tempo scaduto
     let timeIsUp = false;
     let playerCountdown = null;
 
-    socket.on('new-question', ({ options, timeLimit }) => {
+    // stato del puzzle
+    let isPuzzle = false;
+    let puzzleOrder = [];
+    let puzzleImage = '';
+    let selectedCell = null;
+    let puzzleSent = false;
+
+    function waitingBox(text) {
+        return '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:60vh; padding:16px;">' +
+            '<p style="font-size:clamp(30px,10vw,48px); opacity:.75; max-width:90%;">' + text + '</p></div>';
+    }
+
+    // Durante l'immagine di introduzione sull'host il telefono resta vuoto
+    socket.on('round-intro', () => {
+        document.getElementById('joinScreen').style.display = 'none';
+        clearInterval(playerCountdown);
+        pendingResult = null;
+        timeIsUp = false;
+        questionEl.innerHTML = '';
+    });
+
+    socket.on('new-question', ({ type, options, timeLimit, imageData, puzzleOrder: order }) => {
         document.getElementById('joinScreen').style.display = 'none';
 
         pendingResult = null;
         timeIsUp = false;
+        puzzleSent = false;
+        selectedCell = null;
         clearInterval(playerCountdown);
 
-        const html = options.map((o, i) =>
-            '<button class="option-btn option-' + i + '" onclick="submitAnswer(' + i + ')"><span class="shape" style="font-size:3em;">' + shapes[i] + '</span></button>'
-        ).join('');
-        document.getElementById('question').innerHTML = html;
+        if (type === 'puzzle') {
+            isPuzzle = true;
+            startPuzzle(order, imageData);
+        } else {
+            isPuzzle = false;
+            showOptions(options);
+        }
 
-        // NUOVO: il countdown gira ancora "in silenzio", senza elemento visibile
+        // conto alla rovescia silenzioso: nessun timer visibile
         let remaining = timeLimit;
-
         playerCountdown = setInterval(() => {
             remaining--;
-
             if (remaining <= 0) {
                 clearInterval(playerCountdown);
-                document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
                 timeIsUp = true;
+                document.querySelectorAll('.option-btn').forEach(b => b.disabled = true);
+                if (isPuzzle && !puzzleSent) sendPuzzle(true); // invio automatico
                 revealResult();
             }
         }, 1000);
     });
 
-    function submitAnswer(index) {
-        //clearInterval(playerCountdown);
-        socket.emit('submit-answer', { pin: currentPin, answerIndex: index });
-
-        // NUOVO: sostituisce le opzioni con il messaggio di attesa
-        document.getElementById('question').innerHTML =
-            '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:70vh; text-align:center; padding:16px;">' +
-            '<p style="font-family:var(--font-display); font-size:clamp(28px,8vw,44px); opacity:.75;">Hai risposto!</p>' +
-            '<p style="font-size:clamp(18px,5vw,24px); opacity:.5; margin-top:12px;">In attesa dello scadere del tempo...</p>' +
-            '</div>';
+    // ---------- domande standard ----------
+    function showOptions(options) {
+        questionEl.innerHTML = options.map((o, i) =>
+            '<button class="option-btn option-' + i + '" onclick="submitAnswer(' + i + ')"><span class="shape" style="font-size:3em;">' + shapes[i] + '</span></button>'
+        ).join('');
     }
 
-    socket.on('answer-result', ({ correct, points }) => {
-        pendingResult = { correct, points };
+    function submitAnswer(index) {
+        // il conto alla rovescia NON va fermato: il risultato esce solo a tempo scaduto
+        socket.emit('submit-answer', { pin: currentPin, answerIndex: index });
+        questionEl.innerHTML = waitingBox('Hai risposto!<br>In attesa dello scadere del tempo...');
+        if (timeIsUp) revealResult();
+    }
 
-        if (timeIsUp) {
-            revealResult();
+    // ---------- puzzle ----------
+    function startPuzzle(order, imageData) {
+        puzzleOrder = order.slice();
+        puzzleImage = imageData;
+        questionEl.innerHTML =
+            '<div style="grid-column:1/-1; display:flex; flex-direction:column; align-items:center; gap:16px; padding:12px 0;">' +
+            '<div id="puzzleGrid" class="puzzle-grid"></div>' +
+            '<button id="sendPuzzleBtn" class="btn btn-accent" style="width:min(92vw,62vh); font-size:clamp(26px,8vw,36px); padding:22px 12px;" onclick="sendPuzzle(false)">Invia</button>' +
+            '</div>';
+        renderPuzzle();
+    }
+
+    function renderPuzzle() {
+        const grid = document.getElementById('puzzleGrid');
+        if (!grid) return;
+        grid.style.setProperty('--puzzle-img', 'url("' + puzzleImage + '")');
+        grid.innerHTML = puzzleOrder.map((piece, pos) =>
+            '<div class="puzzle-cell' + (pos === selectedCell ? ' selected' : '') + '" data-pos="' + pos + '" ' +
+            'style="background-position:' + ((piece % 3) * 50) + '% ' + (Math.floor(piece / 3) * 50) + '%;"></div>'
+        ).join('');
+        grid.querySelectorAll('.puzzle-cell').forEach(cell => {
+            cell.addEventListener('click', () => onPuzzleCellClick(parseInt(cell.dataset.pos)));
+        });
+    }
+
+    function onPuzzleCellClick(pos) {
+        if (puzzleSent || timeIsUp) return;
+        if (selectedCell === null) {
+            selectedCell = pos;
+        } else if (selectedCell === pos) {
+            selectedCell = null;
+        } else {
+            [puzzleOrder[selectedCell], puzzleOrder[pos]] = [puzzleOrder[pos], puzzleOrder[selectedCell]];
+            selectedCell = null;
         }
+        renderPuzzle();
+    }
+
+    function sendPuzzle(auto) {
+        if (puzzleSent) return;
+        puzzleSent = true;
+        selectedCell = null;
+        socket.emit('submit-puzzle', { pin: currentPin, arrangement: puzzleOrder, auto: !!auto });
+        if (!auto) {
+            questionEl.innerHTML = waitingBox('Puzzle inviato!<br>In attesa dello scadere del tempo...');
+            if (timeIsUp) revealResult();
+        }
+    }
+
+    // ---------- risultato ----------
+    socket.on('answer-result', (res) => {
+        pendingResult = res;
+        if (timeIsUp) revealResult();
     });
 
     function revealResult() {
         if (!pendingResult) return;
+        const { correct, points, puzzle, correctCount } = pendingResult;
 
-        const { correct, points } = pendingResult;
-        const html = '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:70vh; text-align:center; padding:16px;">' +
-            '<div style="font-family:var(--font-display); font-size:clamp(36px,11vw,56px); color:' + (correct ? 'var(--green)' : 'var(--coral)') + '; margin-bottom:16px;">' +
-            (correct ? 'Corretto!' : 'Sbagliato') +
-            '</div>' +
-            '<div style="font-family:var(--font-display); font-size:clamp(56px,20vw,96px); color:' + (correct ? 'var(--green)' : 'var(--coral)') + '; font-weight:700;">+' + points + ' punti</div>' +
+        let title, color;
+        if (puzzle) {
+            title = correct ? 'Puzzle completato!' : correctCount + ' pezzi su 9';
+            color = correct ? 'var(--green)' : (correctCount > 0 ? 'var(--blue)' : 'var(--coral)');
+        } else {
+            title = correct ? 'Corretto!' : 'Sbagliato';
+            color = correct ? 'var(--green)' : 'var(--coral)';
+        }
+
+        questionEl.innerHTML =
+            '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:70vh; text-align:center; padding:16px;">' +
+            '<div style="font-family:var(--font-display); font-size:clamp(36px,11vw,56px); color:' + color + '; margin-bottom:16px;">' + title + '</div>' +
+            '<div style="font-family:var(--font-display); font-size:clamp(56px,20vw,96px); color:' + color + '; font-weight:700;">+' + points + ' punti</div>' +
             '</div>';
-        document.getElementById('question').innerHTML = html;
 
         pendingResult = null;
     }
 
     socket.on('game-over', (leaderboard) => {
         clearInterval(playerCountdown);
-        const html = '<div style="grid-column:1/-1; min-height:80vh; padding:20px; display:flex; flex-direction:column; align-items:center; justify-content:center;">' +
-            '<h1 style="font-family:var(--font-display); font-size:clamp(50px,10vw,56px); text-align:center; margin-bottom:24px;">Partita finita!</h1>' +
-            '<div style="width:100%; max-width:480px;">' +
+        questionEl.innerHTML =
+            '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; min-height:80vh; padding:24px;">' +
+            '<h1 style="font-family:var(--font-display); text-align:center;">Partita finita!</h1>' +
             leaderboard.map((p, i) =>
-                '<div class="leaderboard-row" style="padding:16px 20px;">' +
-                '<span class="player-name" style="font-size:clamp(36px,4vw,24px);">' + (i + 1) + '. ' + p.nickname + '</span>' +
-                '<span class="player-score" style="font-size:clamp(36px,4vw,24px);">' + p.score + '</span>' +
-                '</div>'
+                '<div class="leaderboard-row" style="font-size:clamp(16px,4vw,24px);"><span>' + (i + 1) + '. ' + p.nickname + '</span><span>' + p.score + '</span></div>'
             ).join('') +
-            '</div>' +
             '</div>';
-        document.getElementById('question').innerHTML = html;
     });
 
     socket.on('game-restarted', () => {
         clearInterval(playerCountdown);
-        document.getElementById('question').innerHTML =
-            '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:60vh; padding:16px;">' +
-            '<p style="font-size:clamp(30px,10vw,48px); opacity:.75; max-width:90%;">In attesa che l\'host inizi una nuova partita...</p>' +
-            '</div>';
+        questionEl.innerHTML = waitingBox('In attesa che l\'host inizi una nuova partita...');
     });
 
     socket.on('game-stopped', () => {
         clearInterval(playerCountdown);
-        document.getElementById('question').innerHTML =
-            '<div style="grid-column:1/-1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:60vh; padding:16px;">' +
-            '<p style="font-size:clamp(30px,10vw,48px); opacity:.75; max-width:90%;">In attesa che l\'host inizi una nuova partita...</p>' +
-            '</div>';
+        questionEl.innerHTML = waitingBox('In attesa che l\'host inizi una nuova partita...');
     });
 
     socket.on('room-closed', () => {

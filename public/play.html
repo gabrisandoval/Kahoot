@@ -4,45 +4,110 @@
   <meta charset="UTF-8">
   <title>Gioco in corso</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="puzzle.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    /* Nessuno scroll sulla pagina di gioco: tutto sta nello schermo */
+    html, body { margin:0; height:100%; overflow:hidden; }
+    .stage { height:100vh !important; min-height:0 !important; box-sizing:border-box; overflow:hidden; }
+    #questionScreen { height:100%; flex-direction:column; align-items:center; justify-content:center; gap:1.2vh; }
+    #questionScreen > * { margin-top:0 !important; margin-bottom:0 !important; }
+    #questionScreen > * { flex-shrink:0; }
+    .stage { padding:16px !important; }
+    #optionsLegend { width:min(700px,100%); flex:0 0 auto !important; }
+    #optionsLegend .option-btn { min-height:clamp(64px,14vh,120px) !important; }
+    #questionText { font-size:clamp(20px,4.5vh,40px) !important; }
+    #questionImageBox img { max-width:min(60vw,400px) !important; max-height:22vh !important; margin:0 auto !important; }
+    #puzzleBoard { width:min(76vw,46vh,520px) !important; }
+    #timerDisplay { font-size:clamp(26px,5.5vh,56px) !important; }
+    #answerCount { font-size:clamp(18px,3.5vh,32px) !important; }
+    /* Grafico dei voti allo scadere del tempo */
+    #resultChart { display:none; width:min(700px,100%); height:clamp(110px,22vh,220px); grid-template-columns:repeat(4,1fr); gap:8px; align-items:end; padding:0 8px; }
+    #resultChart.show { display:grid; }
+    .bar-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+    .bar-count { font-family:var(--font-display); font-weight:700; font-size:clamp(16px,3vh,28px); line-height:1.1; margin-bottom:3px; }
+    .bar { width:60%; border-radius:8px 8px 0 0; min-height:4px; transition:height .7s cubic-bezier(.2,.8,.2,1); height:0; }
+    .bar-label { font-size:clamp(14px,2.6vh,22px); margin-top:3px; opacity:.85; }
+    .bar-col.wrong { opacity:.45; }
+    .bar-col.correct .bar-count { color:#7CE3A1; }
+    /* segno di corretto / sbagliato sulle opzioni */
+    .mark { display:inline-flex; align-items:center; justify-content:center; width:1.5em; height:1.5em; border-radius:50%; background:#fff; font-size:.9em; margin-right:8px; line-height:1; }
+    .mark.ok { color:var(--green); }
+    .mark.no { color:var(--coral); }
+    .option-btn.is-wrong { opacity:.5; }
+    .option-btn.is-correct { outline:4px solid #fff; outline-offset:-4px; }
+    /* Foto originale del puzzle (sempre quadrata) mostrata a fine round */
+    #puzzleBoard .puzzle-original { grid-column:1 / -1; grid-row:1 / -1; width:100%; height:100%; aspect-ratio:1 / 1; object-fit:cover; border-radius:8px; animation:puzzleReveal .7s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes puzzleReveal { from { opacity:0; transform:scale(.9); } to { opacity:1; transform:scale(1); } }
+    #scoreboardList, #leaderboard { width:100%; }
+    #scoreboardList .leaderboard-row, #leaderboard .leaderboard-row { font-size:clamp(18px,3.6vh,30px); }
+    .rank { display:inline-block; min-width:1.6em; opacity:.6; }
+    .gain { color:#7CE3A1; font-family:var(--font-display); font-weight:700; font-size:clamp(16px,3vh,26px); margin-right:14px; opacity:0; transform:translateY(8px); transition:opacity .4s ease, transform .4s ease; }
+    .gain.show { opacity:1; transform:translateY(0); }
+
+    /* Immagine di introduzione a tutto schermo, con animazione di entrata e uscita */
+    #introOverlay { position:fixed; inset:0; z-index:40; display:none; background:#000; align-items:center; justify-content:center; overflow:hidden; }
+    #introOverlay.show { display:flex; animation:introIn .45s cubic-bezier(.2,.8,.2,1) both; }
+    #introOverlay.leaving { animation:introOut .35s ease-in both; }
+    #introImg { width:100%; height:100%; object-fit:cover; }
+    #introFallback { position:absolute; color:#fff; font-family:var(--font-display); font-size:clamp(40px,9vw,96px); text-align:center; padding:24px; }
+    @keyframes introIn  { from { opacity:0; transform:scale(1.12); } to { opacity:1; transform:scale(1); } }
+    @keyframes introOut { from { opacity:1; transform:scale(1); } to { opacity:0; transform:scale(.92); } }
+  </style>
 </head>
 <body>
+
+<!-- Musica di gioco: il file cambia in base alla durata della domanda (vedi MUSIC_FILES nello script) -->
+<audio id="bgMusic" loop></audio>
+<div style="position:fixed; top:12px; right:12px; z-index:50; display:flex; align-items:center; gap:8px; background:rgba(0,0,0,.35); padding:6px 10px; border-radius:999px;">
+  <button id="muteBtn" onclick="toggleMute()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#fff;">🔊</button>
+  <input id="volumeSlider" type="range" min="0" max="100" value="50" oninput="setVolume(this.value)" style="width:90px;">
+</div>
+
+<div id="audioNotice" style="display:none; position:fixed; bottom:12px; left:50%; transform:translateX(-50%); z-index:60; background:rgba(0,0,0,.75); color:#fff; padding:10px 18px; border-radius:999px; font-size:16px;"></div>
+
+<div id="introOverlay">
+  <div id="introFallback"></div>
+  <img id="introImg" alt="" style="display:none;">
+</div>
+
 <div class="stage">
 
-  <audio id="bgMusic" src="game.mp3" loop></audio>
-
-  <div style="position:fixed; top:20px; right:20px; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,0.1); padding:10px 16px; border-radius:var(--radius); z-index:10;">
-    <button id="muteBtn" onclick="toggleMute()" style="background:none; border:none; color:var(--paper); font-size:24px; cursor:pointer; padding:0;">🔊</button>
-    <input type="range" id="volumeSlider" min="0" max="100" value="50" oninput="setVolume(this.value)" style="width:100px;">
-  </div>
-
   <div id="questionScreen" style="display:none; width:100%;">
+    <p id="questionProgress" style="opacity:.7; margin:0 0 8px;"></p>
     <h1 id="questionText" style="font-family:var(--font-display); font-size:clamp(24px,5vw,40px); max-width:800px; margin:0 auto 24px;"></h1>
-    <p id="questionProgress" style="font-family:var(--font-display); font-size:clamp(16px,3vw,22px); opacity:.6; margin-bottom:8px;"></p>
+
+    <div id="questionImageBox"></div>
+
+    <div id="puzzleBoard" class="puzzle-grid" style="display:none; width:min(76vw,52vh,520px);"></div>
+
+    <div id="resultChart"></div>
+
     <div class="options-grid" id="optionsLegend" style="max-width:700px; margin:0 auto; min-height:200px;"></div>
-    <p id="answerCount" style="margin-top:24px; font-family:var(--font-display); font-size:clamp(20px,4vw,32px); opacity:.9;"></p>
+
+    <p id="timerDisplay" style="margin-top:16px; font-family:var(--font-display); font-size:clamp(32px,7vw,56px);"></p>
+    <p id="answerCount" style="margin-top:8px; font-family:var(--font-display); font-size:clamp(20px,4vw,32px); opacity:.9;"></p>
+
     <div style="display:flex; gap:12px; justify-content:center; margin-top:20px;">
       <button id="advanceBtn" class="btn btn-on-dark" onclick="advance()">Mostra classifica</button>
-      <button class="btn" onclick="stopGame()" style="background:var(--coral); border-color:var(--coral); color:var(--ink);">Stop</button>
+      <button class="btn btn-on-dark" onclick="stopGame()">Stop</button>
     </div>
   </div>
-
-  <div id="timerDisplay" style="font-family:var(--font-display); font-size:clamp(48px,10vw,90px); font-weight:700; margin-top:16px;"></div>
 
   <div id="scoreboardScreen" style="display:none; width:100%; max-width:520px;">
     <h1 style="font-family:var(--font-display);">Classifica</h1>
     <div id="scoreboardList"></div>
-    <div style="display:flex; gap:12px; justify-content:center; margin-top:20px;">
-      <button class="btn btn-accent" onclick="nextQuestion()">Prossima domanda</button>
-      <button class="btn" onclick="stopGame()" style="background:var(--coral); border-color:var(--coral); color:var(--ink);">Stop</button>
-    </div>
+    <button class="btn btn-accent" onclick="nextQuestion()" style="margin-top:20px;">Prossima domanda</button>
   </div>
 
   <div id="resultsScreen" style="display:none; width:100%; max-width:480px;">
     <h1 style="font-family:var(--font-display);">Classifica finale</h1>
     <div id="leaderboard"></div>
-    <button class="btn btn-on-dark" onclick="restartGame()" style="margin-top:20px;">Nuova partita</button>
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:20px;">
+      <button class="btn btn-accent" onclick="restartGame()">Nuova partita (lobby)</button>
+      <button class="btn btn-on-dark" onclick="goHome()">Torna alla home</button>
+    </div>
   </div>
 
 </div>
@@ -54,183 +119,379 @@
   const currentPin = urlParams.get('pin');
   const shapes = ['▲', '◆', '●', '■'];
 
-  socket.emit('host-rejoin', { pin: currentPin });
+  const music = document.getElementById('bgMusic');
+  music.volume = 0.5;
+  let hostCountdown = null;
 
-  socket.on('host-rejoin-success', () => {
-    nextQuestion();
+  function playMusic() { music.play().catch(() => {}); }
+  // musica dei risultati (parte con il grafico) condivide volume e mute
+  const RESULT_MUSIC = 'music/gong.mp3';
+  const resultAudio = new Audio(RESULT_MUSIC);
+  resultAudio.preload = 'auto';
+  resultAudio.volume = music.volume;
+  resultAudio.addEventListener('error', () => console.log('Musica non trovata: ' + RESULT_MUSIC));
+
+  function toggleMute() {
+    music.muted = !music.muted;
+    resultAudio.muted = music.muted;
+    document.getElementById('muteBtn').innerText = music.muted ? '🔇' : '🔊';
+  }
+  function setVolume(v) {
+    music.volume = v / 100;
+    resultAudio.volume = v / 100;
+    if (music.muted && v > 0) toggleMute();
+  }
+  function playResultMusic() {
+    resultAudio.currentTime = 0;
+    resultAudio.volume = music.volume;
+    resultAudio.play().catch(err => console.log('Suono dei risultati bloccato dal browser:', err.name));
+  }
+
+  // Il browser consente a un suono di partire "da solo" solo se quell'audio e gia stato avviato
+  // con il permesso dell'utente: lo avviamo in silenzio insieme alla musica della domanda.
+  function primeResultAudio() {
+    resultAudio.volume = 0;
+    resultAudio.play().then(() => {
+      resultAudio.pause();
+      resultAudio.currentTime = 0;
+      resultAudio.volume = music.volume;
+    }).catch(() => { resultAudio.volume = music.volume; });
+  }
+  // ---- Musica in base alla durata della domanda ----
+  // Metti i file in public/music/ (o cambia qui i nomi). Per una durata diversa
+  // da queste si usa la musica della durata piu vicina.
+  const MUSIC_FILES = {
+    5:  'music/5s.mp3',
+    10: 'music/10s.mp3',
+    20: 'music/20s.mp3',
+    30: 'music/30s.mp3'
+  };
+
+  function musicFileFor(seconds) {
+    const keys = Object.keys(MUSIC_FILES).map(Number);
+    const nearest = keys.reduce((best, k) => Math.abs(k - seconds) < Math.abs(best - seconds) ? k : best, keys[0]);
+    return MUSIC_FILES[nearest];
+  }
+
+  // Precarica i file per partire senza ritardi
+  Object.values(MUSIC_FILES).forEach(f => { const a = new Audio(); a.preload = 'auto'; a.src = f; });
+
+  // Parte quando compare la domanda (dopo l'immagine) e dura quanto il tempo
+  function startQuestionMusic(timeLimit) {
+    music.pause();
+    music.src = musicFileFor(timeLimit);
+    music.currentTime = 0;
+    console.log('Musica domanda:', music.getAttribute('src'));
+    music.play().then(() => { hideAudioNotice(); primeResultAudio(); }).catch(err => {
+      console.log('Musica bloccata o non riproducibile:', err.name, err.message);
+      // il browser blocca l'audio: avviso a schermo, parte al primo click/tasto
+      showAudioNotice(err.name === 'NotAllowedError'
+        ? '🔇 Clicca sulla pagina per attivare la musica'
+        : '⚠️ Musica non riproducibile: ' + music.getAttribute('src'));
+      const unlock = () => {
+        music.play().then(() => { hideAudioNotice(); primeResultAudio(); }).catch(() => {});
+        ['click', 'keydown', 'touchstart'].forEach(ev => document.removeEventListener(ev, unlock));
+      };
+      ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, unlock));
+    });
+  }
+
+  function showAudioNotice(text) {
+    const n = document.getElementById('audioNotice');
+    n.innerText = text;
+    n.style.display = 'block';
+  }
+  function hideAudioNotice() { document.getElementById('audioNotice').style.display = 'none'; }
+
+  function stopMusic() {
+    music.pause();
+    music.currentTime = 0;
+    resultAudio.pause();
+    resultAudio.currentTime = 0;
+  }
+  music.addEventListener('error', () => { if (music.getAttribute('src')) console.log('Musica non trovata: ' + music.getAttribute('src')); });
+
+  function stopCountdown() {
+    clearInterval(hostCountdown);
+    stopMusic();
+    document.getElementById('timerDisplay').innerText = '';
+  }
+
+  socket.emit('host-rejoin', { pin: currentPin });
+  socket.on('host-rejoin-success', () => { nextQuestion(); });
+
+  function nextQuestion() { socket.emit('host-next-question', { pin: currentPin }); }
+  function advance() { socket.emit('host-show-scoreboard', { pin: currentPin }); }
+  function goHome() {
+    stopCountdown();
+    music.pause();
+    window.location.href = '/index.html';
+  }
+  function restartGame() { socket.emit('host-restart-game', { pin: currentPin }); }
+  function stopGame() {
+    if (!confirm('Vuoi fermare la partita?')) return;
+    stopCountdown();
+    music.pause();
+    socket.emit('host-stop-game', { pin: currentPin });
+  }
+
+  // ---- Immagine di introduzione del round (solo sul display dell'host) ----
+  // File in public/intro/ : cambia qui i nomi se le rinomini
+  const INTRO_FILES = {
+    multiple:  'question.png',
+    truefalse: 'vf.png',
+    image:     'question.png',
+    puzzle:    'puzzle.png'
+  };
+  const INTRO_FALLBACK_TEXT = {
+    multiple: 'Risposta multipla',
+    truefalse: 'Vero o Falso?',
+    image: 'Domanda con immagine',
+    puzzle: 'Puzzle 3×3'
+  };
+
+  // Precarica le immagini all'apertura della pagina: cosi compaiono subito, senza lampi neri
+  const introCache = {};
+  Object.entries(INTRO_FILES).forEach(([kind, file]) => {
+    const im = new Image();
+    im.onload = () => { introCache[kind] = 'ok'; };
+    im.onerror = () => { introCache[kind] = 'missing'; console.log('Immagine non trovata: /intro/' + file); };
+    im.src = '/intro/' + file;
   });
 
-  function nextQuestion() {
-    socket.emit('host-next-question', { pin: currentPin });
+  let introLeaveTimer = null;
+
+  socket.on('round-intro', ({ kind, introMs }) => {
+    stopCountdown();
+    const ov = document.getElementById('introOverlay');
+    const img = document.getElementById('introImg');
+    const fb = document.getElementById('introFallback');
+
+    if (introCache[kind] === 'missing') {
+      // immagine assente: mostra solo il nome del tipo
+      img.style.display = 'none';
+      fb.innerText = INTRO_FALLBACK_TEXT[kind] || '';
+    } else {
+      // immagine pronta (o in caricamento): nessun testo, niente lampo nero con scritte
+      fb.innerText = '';
+      img.src = '/intro/' + INTRO_FILES[kind];
+      img.style.display = 'block';
+    }
+    // entrata (animazione), poi uscita poco prima che parta la domanda
+    clearTimeout(introLeaveTimer);
+    ov.classList.remove('show', 'leaving');
+    void ov.offsetWidth; // riavvia l'animazione
+    ov.classList.add('show');
+    introLeaveTimer = setTimeout(() => ov.classList.add('leaving'), Math.max(0, (introMs || 3000) - 350));
+  });
+
+  function hideIntro() {
+    clearTimeout(introLeaveTimer);
+    document.getElementById('introOverlay').classList.remove('show', 'leaving');
   }
 
-  // NUOVO: il bottone in fondo alla domanda chiede la classifica invece di avanzare subito
-  function advance() {
-    clearInterval();
-    stopMusic();
-    socket.emit('host-show-scoreboard', { pin: currentPin });
-  }
-
-  function restartGame() {
-    socket.emit('host-restart-game', { pin: currentPin });
-  }
-
-  let countdownInterval = null;
-
-  socket.on('new-question', ({ question, options, totalPlayers, imageData, timeLimit }) => {
-    clearInterval();
-    playMusic();
-    document.querySelectorAll('#questionScreen img').forEach(img => img.remove());
+  socket.on('new-question', (q) => {
+    hideIntro();
+    startQuestionMusic(q.timeLimit);
     document.getElementById('scoreboardScreen').style.display = 'none';
     document.getElementById('resultsScreen').style.display = 'none';
-    document.getElementById('questionScreen').style.display = 'block';
-    document.getElementById('questionProgress').innerText = 'Domanda ' + questionNumber + ' di ' + totalQuestions; // NUOVO
-    document.getElementById('questionText').innerText = question;
+    document.getElementById('questionScreen').style.display = 'flex';
+    document.getElementById('questionText').innerText = q.question;
+    document.getElementById('questionProgress').innerText = 'Domanda ' + q.questionNumber + ' di ' + q.totalQuestions;
 
-    const imgHtml = imageData
-            ? '<img src="' + imageData + '" style="max-width:400px; max-height:300px; border-radius:var(--radius); margin:0 auto 20px; display:block;">'
-            : '';
-    document.getElementById('questionText').insertAdjacentHTML('afterend', imgHtml);
+    const imageBox = document.getElementById('questionImageBox');
+    const board = document.getElementById('puzzleBoard');
+    const legend = document.getElementById('optionsLegend');
+    imageBox.innerHTML = '';
 
-    document.getElementById('optionsLegend').innerHTML = options.map((o, i) =>
-            '<div class="option-btn option-' + i + '" style="cursor:default;"><span class="shape">' + shapes[i] + '</span>' + o + '</div>'
-    ).join('');
-    document.getElementById('answerCount').innerText = '0/' + totalPlayers;
+    if (q.type === 'puzzle') {
+      legend.style.display = 'none';
+      board.style.display = 'grid';
+      board.style.setProperty('--puzzle-img', 'url("' + q.imageData + '")');
+      board.innerHTML = q.puzzleOrder.map(piece =>
+        '<div class="puzzle-cell" style="cursor:default; background-position:' +
+        ((piece % 3) * 50) + '% ' + (Math.floor(piece / 3) * 50) + '%;"></div>'
+      ).join('');
+    } else {
+      board.style.display = 'none';
+      board.innerHTML = '';
+      legend.style.display = '';
+      if (q.imageData) {
+        imageBox.innerHTML = '<img src="' + q.imageData + '" style="max-width:400px; max-height:300px; border-radius:var(--radius); margin:0 auto 20px; display:block;">';
+      }
+      legend.innerHTML = q.options.map((o, i) =>
+        '<div class="option-btn option-' + i + '" style="cursor:default;"><span class="shape">' + shapes[i] + '</span>' + o + '</div>'
+      ).join('');
+    }
 
-    startCountdown(timeLimit); // NUOVO
-  });
+    document.getElementById('answerCount').innerText = '0/' + q.totalPlayers;
+    document.getElementById('resultChart').classList.remove('show');
+    document.getElementById('timerDisplay').style.display = '';
+    document.getElementById('answerCount').style.display = '';
 
-  // NUOVO: gestisce il countdown visibile
-  function startCountdown(seconds) {
-    clearInterval(countdownInterval);
-    let remaining = seconds;
-    document.getElementById('timerDisplay').innerText = remaining;
-
-    countdownInterval = setInterval(() => {
+    // Conto alla rovescia
+    clearInterval(hostCountdown);
+    let remaining = q.timeLimit;
+    const timerEl = document.getElementById('timerDisplay');
+    timerEl.innerText = remaining;
+    hostCountdown = setInterval(() => {
       remaining--;
-      document.getElementById('timerDisplay').innerText = remaining > 0 ? remaining : '0';
+      timerEl.innerText = remaining > 0 ? remaining : '0';
       if (remaining <= 0) {
-        clearInterval(countdownInterval);
+        clearInterval(hostCountdown);
+        stopMusic(); // tempo scaduto: finisce la musica della domanda
+        if (q.type === 'puzzle') {
+          playResultMusic(); // il puzzle non ha grafico: la musica parte subito
+          // a fine round al posto del puzzle mescolato compare la foto originale, quadrata
+          document.getElementById('puzzleBoard').innerHTML = '<img class="puzzle-original" alt="" src="' + q.imageData + '">';
+        }
       }
     }, 1000);
-  }
+  });
+
+  // Tempo scaduto: grafico dei voti + segni sulle opzioni
+  const BAR_COLORS = ['var(--coral)', 'var(--blue)', 'var(--amber)', 'var(--green)'];
+
+  socket.on('question-ended', ({ counts, correctIndex }) => {
+    if (document.getElementById('questionScreen').style.display === 'none') return;
+    const max = Math.max(1, ...counts);
+    playResultMusic(); // parte insieme al grafico
+
+    // segni sulle opzioni
+    document.querySelectorAll('#optionsLegend .option-btn').forEach((el, i) => {
+      const ok = i === correctIndex;
+      el.classList.add(ok ? 'is-correct' : 'is-wrong');
+      el.insertAdjacentHTML('afterbegin', '<span class="mark ' + (ok ? 'ok' : 'no') + '">' + (ok ? '✔' : '✖') + '</span>');
+    });
+
+    // grafico
+    const chart = document.getElementById('resultChart');
+    chart.innerHTML = counts.map((c, i) =>
+      '<div class="bar-col ' + (i === correctIndex ? 'correct' : 'wrong') + '">' +
+        '<div class="bar-count">' + c + '</div>' +
+        '<div class="bar" data-h="' + Math.round((c / max) * 100) + '" style="background:' + BAR_COLORS[i] + ';"></div>' +
+        '<div class="bar-label">' + shapes[i] + '</div>' +
+      '</div>'
+    ).join('');
+    document.getElementById('timerDisplay').style.display = 'none';
+    document.getElementById('answerCount').style.display = 'none';
+    chart.classList.add('show');
+    // altezza delle barre: lo spazio e' quello rimasto nel grafico (meno etichette)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const avail = chart.clientHeight - 48;
+      chart.querySelectorAll('.bar').forEach(b => { b.style.height = Math.max(4, avail * b.dataset.h / 100) + 'px'; });
+    }));
+  });
 
   socket.on('answer-count-update', ({ totalAnswers, totalPlayers }) => {
     document.getElementById('answerCount').innerText = totalAnswers + '/' + totalPlayers;
   });
 
-  // NUOVO: riceve la classifica intermedia e la mostra con animazione di sorpasso
   socket.on('scoreboard-update', (leaderboard) => {
-    clearInterval(countdownInterval); // NUOVO: ferma il countdown
-    document.getElementById('timerDisplay').innerText = ''; // NUOVO: pulisce il numero visibile
+    stopCountdown();
     document.getElementById('questionScreen').style.display = 'none';
     document.getElementById('scoreboardScreen').style.display = 'block';
     renderScoreboardWithAnimation(leaderboard);
   });
 
-  // NUOVO: tecnica FLIP per animare il riordino delle righe
+  // ---- Classifica: primi 5, con animazione dei punti guadagnati nell'ultima domanda ----
+  const TOP_N = 5;
+
+  function escapeHtml(t) {
+    return String(t).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+
+  function rowHtml(rank, p, shownScore) {
+    return '<span class="player-name"><span class="rank">' + rank + '</span>' + escapeHtml(p.nickname) + '</span>' +
+      '<span><span class="gain">' + (p.score - p.previous > 0 ? '+' + (p.score - p.previous) : '') + '</span>' +
+      '<span class="player-score">' + shownScore + '</span></span>';
+  }
+
+  let scoreboardRun = 0; // per annullare un'animazione ancora in corso
+
   function renderScoreboardWithAnimation(leaderboard) {
+    const run = ++scoreboardRun;
     const container = document.getElementById('scoreboardList');
+    // se il server non manda il punteggio precedente (server non aggiornato) niente NaN: nessuna animazione dei punti
+    leaderboard = leaderboard.map(p => ({
+      nickname: p.nickname,
+      score: Number(p.score) || 0,
+      previous: Number.isFinite(Number(p.previous)) && p.previous !== null ? Number(p.previous) : (Number(p.score) || 0)
+    }));
+    const top = leaderboard.slice(0, TOP_N);               // i 5 con piu punti adesso
+    const before = top.slice().sort((a, b) => b.previous - a.previous); // come erano prima della domanda
 
-    // 1. Memorizza la posizione attuale di ogni riga esistente
-    const oldPositions = {};
-    container.querySelectorAll('.leaderboard-row').forEach(row => {
-      oldPositions[row.dataset.nick] = row.getBoundingClientRect().top;
+    // 1) righe nell'ordine di prima, con il punteggio di prima
+    container.innerHTML = '';
+    before.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'leaderboard-row';
+      row.dataset.nick = p.nickname;
+      row.innerHTML = rowHtml(i + 1, p, p.previous);
+      container.appendChild(row);
     });
 
-    // 2. Ricostruisce/riordina le righe in base al nuovo punteggio
-    leaderboard.forEach(p => {
-      let row = container.querySelector('[data-nick="' + p.nickname + '"]');
-      if (!row) {
-        row = document.createElement('div');
-        row.className = 'leaderboard-row';
-        row.dataset.nick = p.nickname;
-        row.style.opacity = '0';
-      }
-      row.innerHTML = '<span class="player-name">' + p.nickname + '</span><span class="player-score">' + p.score + '</span>';
-      container.appendChild(row); // append nell'ordine giusto sposta la riga nella posizione corretta
-    });
-
-    // 3. Calcola lo spostamento e anima dalla vecchia posizione alla nuova
-    container.querySelectorAll('.leaderboard-row').forEach(row => {
-      const newTop = row.getBoundingClientRect().top;
-      const oldTop = oldPositions[row.dataset.nick];
-
-      if (oldTop !== undefined) {
-        const delta = oldTop - newTop;
-        row.style.transition = 'none';
-        row.style.transform = 'translateY(' + delta + 'px)';
-        requestAnimationFrame(() => {
-          row.style.transition = 'transform 0.6s ease';
-          row.style.transform = 'translateY(0)';
+    // 2) compaiono i "+punti" e i punteggi salgono
+    setTimeout(() => {
+      if (run !== scoreboardRun) return;
+      container.querySelectorAll('.gain').forEach(g => g.classList.add('show'));
+      const DURATION = 1400;
+      const start = performance.now();
+      function tick(now) {
+        if (run !== scoreboardRun) return;
+        const t = Math.min(1, (now - start) / DURATION);
+        const ease = 1 - Math.pow(1 - t, 3);
+        top.forEach(p => {
+          const row = container.querySelector('[data-nick="' + CSS.escape(p.nickname) + '"]');
+          if (row) row.querySelector('.player-score').innerText = Math.round(p.previous + (p.score - p.previous) * ease);
         });
-      } else {
-        requestAnimationFrame(() => {
-          row.style.transition = 'opacity 0.5s ease';
-          row.style.opacity = '1';
-        });
+        if (t < 1) requestAnimationFrame(tick); else setTimeout(reorder, 600);
       }
-    });
+      requestAnimationFrame(tick);
+    }, 700);
+
+    // 3) le righe si riordinano (FLIP) nella classifica nuova
+    function reorder() {
+      if (run !== scoreboardRun) return;
+      const oldTops = {};
+      container.querySelectorAll('.leaderboard-row').forEach(r => { oldTops[r.dataset.nick] = r.getBoundingClientRect().top; });
+      top.forEach((p, i) => {
+        const row = container.querySelector('[data-nick="' + CSS.escape(p.nickname) + '"]');
+        row.querySelector('.rank').innerText = i + 1;
+        container.appendChild(row);
+      });
+      container.querySelectorAll('.leaderboard-row').forEach(r => {
+        const delta = oldTops[r.dataset.nick] - r.getBoundingClientRect().top;
+        if (!delta) return;
+        r.style.transition = 'none';
+        r.style.transform = 'translateY(' + delta + 'px)';
+        requestAnimationFrame(() => {
+          r.style.transition = 'transform 0.8s cubic-bezier(.2,.8,.2,1)';
+          r.style.transform = 'translateY(0)';
+        });
+      });
+    }
   }
 
   socket.on('game-over', (leaderboard) => {
-    clearInterval(countdownInterval); // NUOVO
-    document.getElementById('timerDisplay').innerText = ''; // NUOVO
+    hideIntro();
+    stopCountdown();
     document.getElementById('questionScreen').style.display = 'none';
     document.getElementById('scoreboardScreen').style.display = 'none';
     document.getElementById('resultsScreen').style.display = 'block';
-    document.getElementById('leaderboard').innerHTML = leaderboard.map(p =>
-            '<div class="leaderboard-row"><span class="player-name">' + p.nickname + '</span><span class="player-score">' + p.score + '</span></div>'
+    document.getElementById('leaderboard').innerHTML = leaderboard.slice(0, TOP_N).map((p, i) =>
+      '<div class="leaderboard-row"><span class="player-name"><span class="rank">' + (i + 1) + '</span>' + escapeHtml(p.nickname) + '</span><span class="player-score">' + p.score + '</span></div>'
     ).join('');
   });
 
-  function stopGame() {
-    if (confirm('Interrompere la partita e tornare alla lobby?')) {
-      stopMusic();
-      socket.emit('host-stop-game', { pin: currentPin });
-    }
-  }
-
-  socket.on('game-stopped', () => {
+  socket.on('game-restarted', () => {
+    stopCountdown();
     window.location.href = '/host.html?pin=' + currentPin;
   });
 
-  function playMusic() {
-    const music = document.getElementById('bgMusic');
-    music.currentTime = 0;
-    music.volume = currentVolume; // NUOVO
-    music.play().catch(err => console.log('Musica non avviata:', err));
-  }
-
-  function stopMusic() {
-    const music = document.getElementById('bgMusic');
+  socket.on('game-stopped', () => {
+    stopCountdown();
     music.pause();
-    music.currentTime = 0;
-  }
-
-  let isMuted = false;
-  let currentVolume = 0.5;
-
-  function toggleMute() {
-    const music = document.getElementById('bgMusic');
-    isMuted = !isMuted;
-    music.muted = isMuted;
-    document.getElementById('muteBtn').innerText = isMuted ? '🔇' : '🔊';
-  }
-
-  function setVolume(value) {
-    currentVolume = value / 100;
-    document.getElementById('bgMusic').volume = currentVolume;
-
-    // Se sposti lo slider sopra 0, esce automaticamente dal mute
-    if (currentVolume > 0 && isMuted) {
-      isMuted = false;
-      document.getElementById('bgMusic').muted = false;
-      document.getElementById('muteBtn').innerText = '🔊';
-    }
-  }
-
-  socket.on('game-restarted', () => {
     window.location.href = '/host.html?pin=' + currentPin;
   });
 </script>

@@ -12,6 +12,8 @@
 1. terminal 1:node server/index.js
 2. terminal 2: ngrok http 3000
 
+Open: https://reunite-gray-reaffirm.ngrok-free.dev/index.html
+
 # Il piano
 1. Server Express minimo — una pagina che risponde
 2. Aggiungere Socket.IO — verificare che client e server comunicano
