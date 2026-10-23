@@ -1,0 +1,61 @@
+/* Stili del puzzle 3x3 (usato da play.html, player.html e questions.html) */
+
+.puzzle-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    width: min(92vw, 62vh);
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+}
+
+.puzzle-cell {
+    background-image: var(--puzzle-img);
+    background-repeat: no-repeat;
+    background-size: 300% 300%;
+    border-radius: 6px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.puzzle-cell.selected {
+    outline: 5px solid var(--coral);
+    outline-offset: -5px;
+    transform: scale(0.96);
+}
+
+/* Selettore del ritaglio in questions.html */
+.crop-box {
+    position: relative;
+    width: min(320px, 100%);
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: 2px solid var(--ink);
+    border-radius: var(--radius);
+    background: var(--paper-dim);
+    touch-action: none;
+    cursor: grab;
+}
+
+.crop-box img {
+    position: absolute;
+    max-width: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.crop-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.crop-grid span {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+}
+.crop-grid .v1 { left: 33.333%; top: 0; bottom: 0; width: 1px; }
+.crop-grid .v2 { left: 66.666%; top: 0; bottom: 0; width: 1px; }
+.crop-grid .h1 { top: 33.333%; left: 0; right: 0; height: 1px; }
+.crop-grid .h2 { top: 66.666%; left: 0; right: 0; height: 1px; }

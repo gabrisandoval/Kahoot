@@ -17,6 +17,11 @@ function loadQuestions() {
     return JSON.parse(data);
 }
 
+// Solo le domande attive (spuntate in questions.html)
+function loadActiveQuestions() {
+    return loadQuestions().filter(q => q.enabled !== false);
+}
+
 function saveQuestion(newQuestion) {
     const questions = loadQuestions();
     newQuestion.id = Date.now().toString();
@@ -71,7 +76,7 @@ app.delete('/api/questions/:id', (req, res) => {
     res.json({ success: true });
 });
 
-// salva il nuovo ordine delle domande
+// salva il nuovo ordine delle domande (rotta specifica: PRIMA di /:id)
 app.put('/api/questions/reorder', (req, res) => {
     const { orderedIds } = req.body;
     reorderQuestions(orderedIds);
@@ -87,20 +92,56 @@ app.put('/api/questions/:id/toggle', (req, res) => {
 
 // modifica una domanda
 app.put('/api/questions/:id', (req, res) => {
-    const { question, options, correctIndex, timeLimit, imageData } = req.body;
-    const success = updateQuestion(req.params.id, { question, options, correctIndex, timeLimit, imageData });
+    const { type, question, options, correctIndex, timeLimit, imageData } = req.body;
+    const success = updateQuestion(req.params.id, { type, question, options, correctIndex, timeLimit, imageData });
     res.json({ success });
 });
 
 // aggiunge una nuova domanda
 app.post('/api/questions', (req, res) => {
-    const { question, options, correctIndex, timeLimit, imageData } = req.body;
-    saveQuestion({ question, options, correctIndex, timeLimit, imageData });
+    const { type, question, options, correctIndex, timeLimit, imageData } = req.body;
+    saveQuestion({ type, question, options, correctIndex, timeLimit, imageData });
     res.json({ success: true });
 });
 
+// ---- PUZZLE 3x3 ----
+// order[posizione] = numero del pezzo mostrato in quella posizione (0..8).
+// Il puzzle e' risolto quando order[i] === i per ogni i.
+function generatePuzzleOrder() {
+    const order = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    let fixedPoints;
+    do {
+        for (let i = order.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [order[i], order[j]] = [order[j], order[i]];
+        }
+        fixedPoints = order.filter((piece, pos) => piece === pos).length;
+    } while (fixedPoints > 2); // evita puzzle gia' (quasi) risolti
+    return order;
+}
+
+// Durata dell'immagine di introduzione prima di ogni domanda (millisecondi)
+const INTRO_MS = 3000;
+
+// Tipo di domanda: decide quale immagine mostrare (public/intro/<tipo>.jpg)
+function getQuestionKind(q) {
+    if (q.type === 'puzzle') return 'puzzle';
+    if (q.imageData) return 'image';
+    if (q.options && q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso') return 'truefalse';
+    return 'multiple';
+}
+
+function isValidPuzzleArrangement(arr) {
+    if (!Array.isArray(arr) || arr.length !== 9) return false;
+    const seen = new Set();
+    for (const v of arr) {
+        if (!Number.isInteger(v) || v < 0 || v > 8 || seen.has(v)) return false;
+        seen.add(v);
+    }
+    return true;
+}
+
 // Memoria delle stanze attive
-// rooms[pin] = { hostSocketId, players: {}, currentQuestionIndex, answers: {} }
 const rooms = {};
 
 io.on('connection', (socket) => {
@@ -155,7 +196,7 @@ io.on('connection', (socket) => {
 
         room.locked = true;
 
-        const QUESTIONS = loadQuestions().filter(q => q.enabled !== false);
+        const QUESTIONS = loadActiveQuestions();
 
         room.currentQuestionIndex++;
         const q = QUESTIONS[room.currentQuestionIndex];
@@ -170,31 +211,79 @@ io.on('connection', (socket) => {
         }
 
         room.answers = {};
-        room.questionStartTime = Date.now();
+        room.questionStartTime = null; // il timer parte dopo l'immagine di introduzione
 
+        // punteggio a inizio domanda: serve per animare i punti guadagnati nella classifica
+        Object.values(room.players).forEach(p => { p.prevScore = p.score; });
+
+        const isPuzzle = q.type === 'puzzle';
+        if (isPuzzle) {
+            room.puzzleOrder = generatePuzzleOrder(); // lo stesso mix per host e giocatori
+            room.puzzleFirstDone = false;
+        }
+
+        // 1) immagine di introduzione: la mostra solo l'host, i telefoni restano vuoti
+        clearTimeout(room.introTimer);
+        clearTimeout(room.endTimer);
+        io.to(pin).emit('round-intro', {
+            kind: getQuestionKind(q),
+            questionNumber: room.currentQuestionIndex + 1,
+            totalQuestions: QUESTIONS.length,
+            introMs: INTRO_MS
+        });
+
+        // 2) poi esce la domanda e parte il tempo
+        room.introTimer = setTimeout(() => {
+            room.questionStartTime = Date.now();
+            sendQuestion();
+        }, INTRO_MS);
+
+        function sendQuestion() {
         io.to(pin).emit('new-question', {
+            type: isPuzzle ? 'puzzle' : 'standard',
             question: q.question,
-            options: q.options,
+            options: q.options || [],
             timeLimit: q.timeLimit,
             totalPlayers: Object.keys(room.players).length,
             imageData: q.imageData || null,
-            questionNumber: room.currentQuestionIndex + 1, // la domanda corrente (1-based)
-            totalQuestions: QUESTIONS.length // totale domande attive
+            puzzleOrder: isPuzzle ? room.puzzleOrder : null,
+            questionNumber: room.currentQuestionIndex + 1,
+            totalQuestions: QUESTIONS.length
         });
+
+        // Allo scadere del tempo l'host riceve quanti hanno scelto ogni opzione
+        if (!isPuzzle) {
+            clearTimeout(room.endTimer);
+            room.endTimer = setTimeout(() => {
+                const counts = (q.options || []).map(() => 0);
+                Object.values(room.answers).forEach(a => {
+                    if (Number.isInteger(a) && counts[a] !== undefined) counts[a]++;
+                });
+                io.to(room.hostSocketId).emit('question-ended', {
+                    counts,
+                    correctIndex: q.correctIndex,
+                    totalPlayers: Object.keys(room.players).length
+                });
+            }, q.timeLimit * 1000 + 400); // piccola tolleranza per le risposte in arrivo
+        }
+        }
     });
 
-    // Un giocatore risponde
+    // Un giocatore risponde (domande normali)
     socket.on('submit-answer', ({ pin, answerIndex }) => {
         const room = rooms[pin];
-        if (!room) return;
+        if (!room || !room.players[socket.id]) return;
 
         if (room.answers[socket.id] !== undefined) return;
+        if (!room.questionStartTime) return; // immagine di introduzione in corso
 
         const timeTaken = (Date.now() - room.questionStartTime) / 1000;
-        room.answers[socket.id] = answerIndex;
 
-        const QUESTIONS = loadQuestions().filter(q => q.enabled !== false);
+        const QUESTIONS = loadActiveQuestions();
         const q = QUESTIONS[room.currentQuestionIndex];
+        if (!q || q.type === 'puzzle') return;
+
+        room.answers[socket.id] = answerIndex;
 
         const withinTime = timeTaken <= q.timeLimit;
         const isCorrect = withinTime && answerIndex === q.correctIndex;
@@ -213,11 +302,53 @@ io.on('connection', (socket) => {
         io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
     });
 
+    // Un giocatore invia il puzzle
+    // arrangement[posizione] = pezzo; auto = true se inviato dal timer scaduto
+    socket.on('submit-puzzle', ({ pin, arrangement, auto }) => {
+        const room = rooms[pin];
+        if (!room || !room.players[socket.id]) return;
+        if (room.answers[socket.id] !== undefined) return;
+        if (!isValidPuzzleArrangement(arrangement)) return;
+        if (!room.questionStartTime) return; // immagine di introduzione in corso
+
+        const QUESTIONS = loadActiveQuestions();
+        const q = QUESTIONS[room.currentQuestionIndex];
+        if (!q || q.type !== 'puzzle') return;
+
+        const timeTaken = (Date.now() - room.questionStartTime) / 1000;
+        const tooLate = timeTaken > q.timeLimit + 3; // piccola tolleranza per la latenza di rete
+
+        room.answers[socket.id] = arrangement;
+
+        const correctCount = tooLate ? 0 : arrangement.filter((piece, pos) => piece === pos).length;
+        const complete = correctCount === 9;
+
+        // 100 punti a pezzo: puzzle completo = 900
+        let points = correctCount * 100;
+
+        // +100 (totale 1000) al primo che INVIA un puzzle completo entro il tempo
+        if (complete && !auto && timeTaken <= q.timeLimit && !room.puzzleFirstDone) {
+            points += 100;
+            room.puzzleFirstDone = true;
+        }
+
+        room.players[socket.id].score += points;
+
+        socket.emit('answer-result', { puzzle: true, correct: complete, correctCount, points });
+
+        const totalPlayers = Object.keys(room.players).length;
+        const totalAnswers = Object.keys(room.answers).length;
+        io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
+    });
+
     // L'host riavvia la partita nella stessa stanza
     socket.on('host-restart-game', ({ pin }) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
 
+        clearTimeout(room.introTimer);
+        clearTimeout(room.endTimer);
+        room.questionStartTime = null;
         room.currentQuestionIndex = -1;
         room.answers = {};
         room.locked = false;
@@ -255,9 +386,15 @@ io.on('connection', (socket) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
 
+        clearTimeout(room.endTimer);
+
         const leaderboard = Object.values(room.players)
             .sort((a, b) => b.score - a.score)
-            .map(p => ({ nickname: p.nickname, score: p.score }));
+            .map(p => ({
+                nickname: p.nickname,
+                score: p.score,
+                previous: p.prevScore === undefined ? 0 : p.prevScore // punteggio prima di questa domanda
+            }));
 
         io.to(pin).emit('scoreboard-update', leaderboard);
     });
@@ -267,6 +404,9 @@ io.on('connection', (socket) => {
         const room = rooms[pin];
         if (!room || room.hostSocketId !== socket.id) return;
 
+        clearTimeout(room.introTimer);
+        clearTimeout(room.endTimer);
+        room.questionStartTime = null;
         room.currentQuestionIndex = -1;
         room.answers = {};
         room.locked = false;
@@ -296,9 +436,7 @@ function generatePin() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    //console.log(`Server avviato su http://localhost:${PORT}`);
-    console.log(`Server avviato su https://reunite-gray-reaffirm.ngrok-free.dev/index.html`);
-
+    console.log(`Server avviato su http://localhost:${PORT}`);
 });

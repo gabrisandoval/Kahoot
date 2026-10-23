@@ -7,6 +7,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Lobby compatta: in alto elementi piccoli, la card dei giocatori occupa lo spazio rimasto */
+        html, body { margin:0; height:100%; overflow:hidden; }
+        .stage { height:100vh !important; min-height:0 !important; padding:10px 20px 14px !important; gap:0 !important; overflow:hidden; }
+        .stage h1 { font-size:clamp(18px,3.2vh,30px) !important; margin:0 !important; }
+        .stage .pin-display { font-size:clamp(30px,6.5vh,64px) !important; margin:2px 0 !important; line-height:1; }
+        #qrcode { padding:6px !important; }
+        #qrcode img, #qrcode canvas { width:clamp(80px,14vh,140px) !important; height:auto !important; }
+        .stage .btn { padding:8px 18px !important; font-size:14px !important; }
+        #lobbyTop { flex:0 0 50%; min-height:0; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:clamp(4px,1.2vh,12px); }
+        #lobbyTop > div { margin-top:0 !important; }
+        #playersCard { flex:0 0 50%; min-height:0; width:96% !important; max-width:1400px !important; margin-top:0 !important; display:flex; flex-direction:column; overflow:hidden; }
+        #playersCard .players-title { margin:0 0 10px; font-weight:600; opacity:.7; font-size:clamp(16px,2.6vh,22px); }
+        #players { flex:1; min-height:0; overflow-y:auto; align-content:flex-start; }
+        #players .player-chip { font-size:clamp(16px,2.8vh,26px); padding:8px 16px; }
+    </style>
 </head>
 <body>
 <div class="stage">
@@ -18,6 +34,8 @@
         <input type="range" id="volumeSlider" min="0" max="100" value="50" oninput="setVolume(this.value)" style="width:100px;">
     </div>
 
+    <!-- Meta schermo in alto: PIN, QR e pulsanti -->
+    <div id="lobbyTop">
     <h1 style="font-family:var(--font-display);">Lobby partita</h1>
 
     <div class="pin-display" id="pin"></div>
@@ -39,8 +57,11 @@
         <button id="playBtn" class="btn btn-accent" onclick="openPlayScreen()" style="display:none;">GIOCA</button>
     </div>
 
-    <div class="card" style="width:95%; max-width:900px; margin-top:20px; min-height:60px;">
-        <p style="margin:0 0 12px; font-weight:600; opacity:.7;">Giocatori</p>
+    </div><!-- /lobbyTop -->
+
+    <!-- Meta schermo in basso: giocatori -->
+    <div class="card" id="playersCard">
+        <p class="players-title">Giocatori (<span id="playerCount">0</span>)</p>
         <div id="players" style="display:flex; flex-wrap:wrap; gap:8px;">
             <p style="margin:0; opacity:.6;">Nessun giocatore ancora</p>
         </div>
@@ -66,15 +87,25 @@
         }
     });
 
+    let currentJoinUrl = '';
+
+    // Il link usa l'indirizzo con cui hai aperto questa pagina (apri l'host dall'URL ngrok)
+    function getBaseUrl() {
+        return window.location.origin;
+    }
+
+    function renderQr() {
+        if (!currentPin) return;
+        currentJoinUrl = getBaseUrl() + '/player.html?pin=' + currentPin + '&ngrok-skip-browser-warning=true';
+        document.getElementById('qrcode').innerHTML = '';
+        new QRCode(document.getElementById('qrcode'), currentJoinUrl);
+    }
+
     function setupRoomUI(pin) {
         currentPin = pin;
         document.getElementById('pin').innerText = pin;
 
-        const joinUrl = window.location.origin + '/player.html?pin=' + pin + '&ngrok-skip-browser-warning=true';
-        currentJoinUrl = joinUrl;
-
-        document.getElementById('qrcode').innerHTML = '';
-        new QRCode(document.getElementById('qrcode'), joinUrl);
+        renderQr();
 
         document.getElementById('copyLinkBtn').style.display = 'inline-block';
         document.getElementById('playBtn').style.display = 'inline-block';
@@ -89,14 +120,12 @@
     socket.on('host-rejoin-success', ({ pin, locked, players }) => {
         setupRoomUI(pin);
         document.getElementById('lockBtn').innerText = locked ? 'Sblocca stanza' : 'Blocca stanza';
-        document.getElementById('players').innerText = 'Giocatori: ' + players.join(', ');
+        renderPlayers(players);
         playLobbyMusic()
     });
 
     function copyLink() {
-        let currentJoinUrl = '';
-        const link = document.getElementById(currentJoinUrl).innerText;
-        navigator.clipboard.writeText(link).then(() => {
+        navigator.clipboard.writeText(currentJoinUrl).then(() => {
             document.getElementById('copyLinkBtn').innerText = 'Copiato!';
             setTimeout(() => {
                 document.getElementById('copyLinkBtn').innerText = 'Copia link';
@@ -114,7 +143,10 @@
 
     let renderedPlayers = [];
 
-    socket.on('player-list-update', (players) => {
+    socket.on('player-list-update', (players) => renderPlayers(players));
+
+    function renderPlayers(players) {
+        document.getElementById('playerCount').innerText = players.length;
         const playersContainer = document.getElementById('players');
 
         if (players.length === 0) {
@@ -146,7 +178,7 @@
         });
 
         renderedPlayers = players;
-    });
+    }
 
     function playLobbyMusic() {
         const music = document.getElementById('lobbyMusic');

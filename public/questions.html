@@ -4,28 +4,59 @@
     <meta charset="UTF-8">
     <title>Aggiungi domande</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="puzzle.css">
+    <style>
+        html, body { height:100%; }
+        .qpage { max-width:1200px; margin:0 auto; padding:20px; height:100vh; box-sizing:border-box; display:flex; flex-direction:column; }
+        .qlayout { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; }
+        .qcard { min-height:0; display:flex; flex-direction:column; overflow:hidden; margin:0; }
+        .qcard-body { flex:1; min-height:0; overflow-y:auto; padding-right:6px; }
+        .qcard h1, .qcard h2 { margin:0 0 12px; font-family:var(--font-display); }
+        @media (max-width:800px) {
+            .qpage { height:auto; display:block; }
+            .qlayout { grid-template-columns:1fr; }
+            .qcard { overflow:visible; }
+            #formCard { }
+            #listCard .qcard-body { max-height:60vh; overflow-y:auto; }
+        }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body style="background:var(--paper-dim);">
-<div style="max-width:560px; margin:0 auto; padding:32px 20px;">
+<div class="qpage">
     <a href="/index.html"><button class="btn">← Torna alla home</button></a>
 
-    <div class="card" style="margin-top:20px;">
-        <h1 id="formTitle" style="font-family:var(--font-display); margin-top:0;">Aggiungi una domanda</h1>
+    <div class="qlayout">
+    <div class="card qcard" id="formCard">
+    <div class="qcard-body">
+        <h1 id="formTitle">Aggiungi una domanda</h1>
 
         <label style="font-weight:600;">Tipo di domanda</label>
         <select id="questionType" onchange="toggleQuestionType()" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin:8px 0 16px; font-family:var(--font-body);">
             <option value="multiple">Risposta multipla</option>
             <option value="truefalse">Vero o Falso</option>
             <option value="image">Immagine</option>
+            <option value="puzzle">Puzzle 3×3</option>
         </select>
 
         <input id="questionInput" placeholder="Testo della domanda" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:12px; font-family:var(--font-body);">
 
+        <!-- Tipo "Immagine" -->
         <div id="imageUploadField" style="display:none; margin-bottom:12px;">
             <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
             <img id="imagePreview" style="max-width:100%; max-height:200px; margin-top:10px; display:none; border-radius:var(--radius);">
+        </div>
+
+        <!-- Tipo "Puzzle": carica l'immagine e scegli la parte da usare -->
+        <div id="puzzleField" style="display:none; margin-bottom:12px;">
+            <input type="file" id="puzzleFileInput" accept="image/*" onchange="loadPuzzleImage()">
+            <p style="font-size:13px; opacity:.7; margin:10px 0;">Trascina l'immagine per scegliere la parte da usare e ingrandisci con lo slider. La griglia mostra i 9 pezzi.</p>
+            <div id="cropBox" class="crop-box">
+                <img id="cropImg" alt="" draggable="false" style="display:none;">
+                <div class="crop-grid"><span class="v1"></span><span class="v2"></span><span class="h1"></span><span class="h2"></span></div>
+            </div>
+            <input type="range" id="zoomSlider" min="100" max="300" value="100" oninput="onZoom(this.value)" style="width:min(320px,100%); margin-top:10px;">
         </div>
 
         <div id="multipleOptions">
@@ -41,7 +72,7 @@
             <label style="display:block;"><input type="radio" name="tfCorrectOption" value="1"> Falso</label>
         </div>
 
-        <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="10" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:16px; font-family:var(--font-body);">
+        <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:16px; font-family:var(--font-body);">
 
         <div style="display:flex; gap:12px;">
             <button class="btn btn-accent" onclick="saveQuestion()">Salva domanda</button>
@@ -49,64 +80,228 @@
         </div>
 
         <p id="message" style="color:var(--coral); font-weight:600;"></p>
-    </div>
+    </div><!-- /qcard-body -->
+    </div><!-- /formCard -->
 
-    <h2 style="font-family:var(--font-display); margin-top:32px;">Domande salvate (<span id="questionCount">0</span>)</h2>
-    <div style="display:flex; gap:12px; margin-bottom:16px;">
+    <div class="card qcard" id="listCard">
+    <h2>Domande salvate (<span id="questionCount">0</span>)</h2>
+    <div style="display:flex; gap:12px; margin-bottom:12px;">
         <button class="btn" onclick="toggleAll(true)">Attiva tutte</button>
         <button class="btn" onclick="toggleAll(false)">Disattiva tutte</button>
     </div>
-    <div id="questionList"></div>
+    <div id="questionList" class="qcard-body"></div>
+    </div><!-- /listCard -->
+    </div><!-- /qlayout -->
 </div>
 
 <script>
+    const PUZZLE_DEFAULT_TEXT = 'Completa il puzzle';
     let editingId = null;
     let currentQuestions = [];
     let draggedId = null;
+    let currentImageData = null; // tipo "Immagine": immagine in base64
+
+    // ---- Puzzle: stato del ritaglio ----
+    const cropState = { source: null, nw: 0, nh: 0, zoom: 1, x: 0, y: 0, loaded: false };
+    let puzzleUntouched = false;   // true se in modifica non hai toccato ritaglio/zoom
+    let editingPuzzleData = null;  // immagine gia' ritagliata della domanda in modifica
 
     function toggleQuestionType() {
         const type = document.getElementById('questionType').value;
         document.getElementById('multipleOptions').style.display = (type === 'multiple' || type === 'image') ? 'block' : 'none';
         document.getElementById('trueFalseOptions').style.display = (type === 'truefalse') ? 'block' : 'none';
         document.getElementById('imageUploadField').style.display = (type === 'image') ? 'block' : 'none';
+        document.getElementById('puzzleField').style.display = (type === 'puzzle') ? 'block' : 'none';
+
+        // Un puzzle ha bisogno di piu' tempo: suggerisce 30 secondi al posto dei 15 di default
+        const timeInput = document.getElementById('timeLimit');
+        if (type === 'puzzle' && timeInput.value === '15') timeInput.value = '30';
+
+        // Testo di default per il puzzle (si puo modificare)
+        const qInput = document.getElementById('questionInput');
+        if (type === 'puzzle' && !qInput.value.trim()) qInput.value = PUZZLE_DEFAULT_TEXT;
+        if (type !== 'puzzle' && qInput.value === PUZZLE_DEFAULT_TEXT) qInput.value = '';
     }
 
+    // ================= RITAGLIO DEL PUZZLE =================
+    function cropSize() { return document.getElementById('cropBox').clientWidth; }
+    function currentScale() { return (cropSize() / Math.min(cropState.nw, cropState.nh)) * cropState.zoom; }
+
+    function clampCrop() {
+        const V = cropSize();
+        const s = currentScale();
+        cropState.x = Math.min(0, Math.max(V - cropState.nw * s, cropState.x));
+        cropState.y = Math.min(0, Math.max(V - cropState.nh * s, cropState.y));
+    }
+
+    function renderCrop() {
+        const img = document.getElementById('cropImg');
+        const s = currentScale();
+        img.style.width = (cropState.nw * s) + 'px';
+        img.style.height = (cropState.nh * s) + 'px';
+        img.style.left = cropState.x + 'px';
+        img.style.top = cropState.y + 'px';
+    }
+
+    // Carica un'immagine (data URL) nel selettore e la centra
+    function setupCropImage(src, untouched) {
+        const probe = new Image();
+        probe.onload = () => {
+            cropState.source = probe;
+            cropState.nw = probe.naturalWidth;
+            cropState.nh = probe.naturalHeight;
+            cropState.zoom = 1;
+            document.getElementById('zoomSlider').value = 100;
+
+            const img = document.getElementById('cropImg');
+            img.src = src;
+            img.style.display = 'block';
+
+            const V = cropSize();
+            const s = currentScale();
+            cropState.x = (V - cropState.nw * s) / 2;
+            cropState.y = (V - cropState.nh * s) / 2;
+            clampCrop();
+            renderCrop();
+
+            cropState.loaded = true;
+            puzzleUntouched = untouched;
+        };
+        probe.src = src;
+    }
+
+    function loadPuzzleImage() {
+        const file = document.getElementById('puzzleFileInput').files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => setupCropImage(e.target.result, false);
+        reader.readAsDataURL(file);
+    }
+
+    function onZoom(value) {
+        if (!cropState.loaded) return;
+        const V = cropSize();
+        const oldS = currentScale();
+        // punto dell'immagine che sta al centro: resta al centro mentre ingrandisci
+        const cx = (V / 2 - cropState.x) / oldS;
+        const cy = (V / 2 - cropState.y) / oldS;
+        cropState.zoom = value / 100;
+        const s = currentScale();
+        cropState.x = V / 2 - cx * s;
+        cropState.y = V / 2 - cy * s;
+        clampCrop();
+        renderCrop();
+        puzzleUntouched = false;
+    }
+
+    // Trascinamento (mouse e touch)
+    (function initCropDrag() {
+        const box = document.getElementById('cropBox');
+        let dragging = false, startX = 0, startY = 0, originX = 0, originY = 0;
+
+        box.addEventListener('pointerdown', (e) => {
+            if (!cropState.loaded) return;
+            dragging = true;
+            startX = e.clientX; startY = e.clientY;
+            originX = cropState.x; originY = cropState.y;
+            box.setPointerCapture(e.pointerId);
+            box.style.cursor = 'grabbing';
+        });
+        box.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            cropState.x = originX + (e.clientX - startX);
+            cropState.y = originY + (e.clientY - startY);
+            clampCrop();
+            renderCrop();
+            puzzleUntouched = false;
+        });
+        const end = () => { dragging = false; box.style.cursor = 'grab'; };
+        box.addEventListener('pointerup', end);
+        box.addEventListener('pointercancel', end);
+    })();
+
+    // Ritaglia la parte visibile e la salva come quadrato 720x720 (JPEG leggero)
+    function exportCroppedImage() {
+        const V = cropSize();
+        const s = currentScale();
+        const OUT = 720; // divisibile per 3
+        const canvas = document.createElement('canvas');
+        canvas.width = OUT;
+        canvas.height = OUT;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(cropState.source, -cropState.x / s, -cropState.y / s, V / s, V / s, 0, 0, OUT, OUT);
+        return canvas.toDataURL('image/jpeg', 0.88);
+    }
+
+    function resetPuzzleField() {
+        cropState.loaded = false;
+        cropState.source = null;
+        puzzleUntouched = false;
+        editingPuzzleData = null;
+        const img = document.getElementById('cropImg');
+        img.removeAttribute('src');
+        img.style.display = 'none';
+        document.getElementById('puzzleFileInput').value = '';
+        document.getElementById('zoomSlider').value = 100;
+    }
+
+    // ================= SALVATAGGIO =================
     async function saveQuestion() {
         const type = document.getElementById('questionType').value;
         const question = document.getElementById('questionInput').value.trim();
         const timeLimit = parseInt(document.getElementById('timeLimit').value);
+        const messageEl = document.getElementById('message');
 
-        let options, correctIndex;
+        let questionData;
 
-        if (type === 'truefalse') {
-            options = ['Vero', 'Falso'];
-            const selected = document.querySelector('input[name="tfCorrectOption"]:checked');
-            correctIndex = selected ? parseInt(selected.value) : NaN;
+        if (type === 'puzzle') {
+            if (!cropState.loaded) {
+                messageEl.innerText = 'Carica un\'immagine per il puzzle';
+                return;
+            }
+            if (isNaN(timeLimit)) {
+                messageEl.innerText = 'Inserisci il tempo limite';
+                return;
+            }
+            const imageData = (puzzleUntouched && editingPuzzleData) ? editingPuzzleData : exportCroppedImage();
+            questionData = {
+                type: 'puzzle',
+                question: question || PUZZLE_DEFAULT_TEXT,
+                timeLimit,
+                imageData
+            };
         } else {
-            options = [
-                document.getElementById('option0').value.trim(),
-                document.getElementById('option1').value.trim(),
-                document.getElementById('option2').value.trim(),
-                document.getElementById('option3').value.trim()
-            ];
-            const selected = document.querySelector('input[name="correctOption"]:checked');
-            correctIndex = selected ? parseInt(selected.value) : NaN;
-        }
+            let options, correctIndex;
 
-        // NUOVO: per le domande immagine, serve una foto caricata
-        if (type === 'image' && !currentImageData) {
-            document.getElementById('message').innerText = 'Carica un\'immagine';
-            return;
-        }
+            if (type === 'truefalse') {
+                options = ['Vero', 'Falso'];
+                const selected = document.querySelector('input[name="tfCorrectOption"]:checked');
+                correctIndex = selected ? parseInt(selected.value) : NaN;
+            } else {
+                options = [
+                    document.getElementById('option0').value.trim(),
+                    document.getElementById('option1').value.trim(),
+                    document.getElementById('option2').value.trim(),
+                    document.getElementById('option3').value.trim()
+                ];
+                const selected = document.querySelector('input[name="correctOption"]:checked');
+                correctIndex = selected ? parseInt(selected.value) : NaN;
+            }
 
-        if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
-            document.getElementById('message').innerText = 'Compila tutti i campi e seleziona la risposta corretta';
-            return;
-        }
+            if (type === 'image' && !currentImageData) {
+                messageEl.innerText = 'Carica un\'immagine';
+                return;
+            }
 
-        const questionData = { question, options, correctIndex, timeLimit };
-        if (type === 'image') {
-            questionData.imageData = currentImageData; // NUOVO
+            if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
+                messageEl.innerText = 'Compila tutti i campi e seleziona la risposta corretta';
+                return;
+            }
+
+            questionData = { question, options, correctIndex, timeLimit };
+            if (type === 'image') {
+                questionData.imageData = currentImageData;
+            }
         }
 
         const body = JSON.stringify(questionData);
@@ -117,7 +312,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body
             });
-            document.getElementById('message').innerText = 'Domanda modificata!';
+            messageEl.innerText = 'Domanda modificata!';
             cancelEdit();
         } else {
             await fetch('/api/questions', {
@@ -125,7 +320,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body
             });
-            document.getElementById('message').innerText = 'Domanda salvata!';
+            messageEl.innerText = 'Domanda salvata!';
             clearForm();
         }
 
@@ -144,6 +339,12 @@
 
         document.querySelectorAll('input[name="correctOption"]').forEach(r => r.checked = false);
         document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => r.checked = false);
+
+        currentImageData = null;
+        document.getElementById('imageInput').value = '';
+        document.getElementById('imagePreview').style.display = 'none';
+
+        resetPuzzleField();
     }
 
     function editQuestion(id) {
@@ -152,25 +353,20 @@
 
         editingId = q.id;
         document.getElementById('questionInput').value = q.question;
-        document.getElementById('timeLimit').value = q.timeLimit;
 
-        const isTrueFalse = q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso';
-
-        if (q.imageData) {
-            // NUOVO: domanda di tipo immagine
+        if (q.type === 'puzzle') {
+            document.getElementById('questionType').value = 'puzzle';
+            toggleQuestionType();            // mostra il selettore prima di caricare l'immagine
+            editingPuzzleData = q.imageData;
+            setupCropImage(q.imageData, true);
+        } else if (q.imageData) {
             document.getElementById('questionType').value = 'image';
             toggleQuestionType();
             currentImageData = q.imageData;
             document.getElementById('imagePreview').src = q.imageData;
             document.getElementById('imagePreview').style.display = 'block';
-            document.getElementById('option0').value = q.options[0];
-            document.getElementById('option1').value = q.options[1];
-            document.getElementById('option2').value = q.options[2];
-            document.getElementById('option3').value = q.options[3];
-            document.querySelectorAll('input[name="correctOption"]').forEach(r => {
-                r.checked = (parseInt(r.value) === q.correctIndex);
-            });
-        } else if (isTrueFalse) {
+            fillOptions(q);
+        } else if (q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso') {
             document.getElementById('questionType').value = 'truefalse';
             toggleQuestionType();
             document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => {
@@ -179,17 +375,22 @@
         } else {
             document.getElementById('questionType').value = 'multiple';
             toggleQuestionType();
-            document.getElementById('option0').value = q.options[0];
-            document.getElementById('option1').value = q.options[1];
-            document.getElementById('option2').value = q.options[2];
-            document.getElementById('option3').value = q.options[3];
-            document.querySelectorAll('input[name="correctOption"]').forEach(r => {
-                r.checked = (parseInt(r.value) === q.correctIndex);
-            });
+            fillOptions(q);
         }
 
+        document.getElementById('timeLimit').value = q.timeLimit; // dopo toggleQuestionType
         document.getElementById('formTitle').innerText = 'Modifica domanda';
         document.getElementById('cancelBtn').style.display = 'inline-block';
+    }
+
+    function fillOptions(q) {
+        document.getElementById('option0').value = q.options[0];
+        document.getElementById('option1').value = q.options[1];
+        document.getElementById('option2').value = q.options[2];
+        document.getElementById('option3').value = q.options[3];
+        document.querySelectorAll('input[name="correctOption"]').forEach(r => {
+            r.checked = (parseInt(r.value) === q.correctIndex);
+        });
     }
 
     function cancelEdit() {
@@ -205,42 +406,16 @@
         loadQuestionList();
     }
 
-    async function loadQuestionList() {
-        const res = await fetch('/api/questions');
-        currentQuestions = await res.json();
-
-        document.getElementById('questionCount').innerText = currentQuestions.filter(q => q.enabled !== false).length;
-
-        document.getElementById('questionList').innerHTML = currentQuestions.map(q => {
-            const isEnabled = q.enabled !== false; // NUOVO: attiva di default se il campo non esiste
-            return '<div class="card" data-id="' + q.id + '" ' +
-                'style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:16px;' + (isEnabled ? '' : ' opacity:.5;') + '">' +
-                '<span style="display:flex; align-items:center; gap:10px;">' +
-                '<input type="checkbox" ' + (isEnabled ? 'checked' : '') + ' onchange="toggleEnabled(\'' + q.id + '\', this.checked)" style="width:20px; height:20px; cursor:pointer;">' +
-                '<span draggable="true" class="drag-handle" style="cursor:grab; opacity:.4; font-size:20px; user-select:none;">☰</span>' +
-                '<span>' + q.question + ' <strong style="color:var(--green);">(' + q.options[q.correctIndex] + ')</strong></span>' +
-                '</span>' +
-                '<span style="display:flex; gap:8px;">' +
-                '<button class="btn" onclick="editQuestion(\'' + q.id + '\')">Modifica</button>' +
-                '<button class="btn" onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
-                '</span>' +
-                '</div>';
-        }).join('');
-
-        attachDragEvents();
-    }
-
     async function toggleEnabled(id, enabled) {
         await fetch('/api/questions/' + id + '/toggle', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled })
         });
-        loadQuestionList(); // ricarica per aggiornare l'opacità e il conteggio
+        loadQuestionList();
     }
 
     async function toggleAll(enabled) {
-        // NUOVO: manda una richiesta di aggiornamento per ogni domanda, in parallelo
         await Promise.all(
             currentQuestions.map(q =>
                 fetch('/api/questions/' + q.id + '/toggle', {
@@ -253,20 +428,52 @@
         loadQuestionList();
     }
 
-    let currentImageData = null; // NUOVO: qui teniamo l'immagine convertita in base64
-
     function previewImage() {
         const file = document.getElementById('imageInput').files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = (e) => {
-            currentImageData = e.target.result; // stringa base64 dell'immagine
+            currentImageData = e.target.result;
             const preview = document.getElementById('imagePreview');
             preview.src = currentImageData;
             preview.style.display = 'block';
         };
         reader.readAsDataURL(file);
+    }
+
+    async function loadQuestionList() {
+        const res = await fetch('/api/questions');
+        currentQuestions = await res.json();
+
+        document.getElementById('questionCount').innerText = currentQuestions.filter(q => q.enabled !== false).length;
+
+        document.getElementById('questionList').innerHTML = currentQuestions.map(q => {
+            const isEnabled = q.enabled !== false;
+            const isPuzzle = q.type === 'puzzle';
+            const thumb = q.imageData
+                ? '<img src="' + q.imageData + '" style="width:44px; height:44px; object-fit:cover; border-radius:6px;">'
+                : '';
+            const answer = isPuzzle
+                ? '<em style="opacity:.7;">Puzzle 3×3</em>'
+                : '<strong style="color:var(--green);">(' + q.options[q.correctIndex] + ')</strong>';
+
+            return '<div class="card" data-id="' + q.id + '" ' +
+                'style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:16px;' + (isEnabled ? '' : ' opacity:.5;') + '">' +
+                    '<span style="display:flex; align-items:center; gap:10px;">' +
+                        '<input type="checkbox" ' + (isEnabled ? 'checked' : '') + ' onchange="toggleEnabled(\'' + q.id + '\', this.checked)" style="width:20px; height:20px; cursor:pointer;">' +
+                        '<span draggable="true" class="drag-handle" style="cursor:grab; opacity:.4; font-size:20px; user-select:none;">☰</span>' +
+                        thumb +
+                        '<span>' + q.question + ' ' + answer + '</span>' +
+                    '</span>' +
+                    '<span style="display:flex; gap:8px;">' +
+                        '<button class="btn" onclick="editQuestion(\'' + q.id + '\')">Modifica</button>' +
+                        '<button class="btn" onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
+                    '</span>' +
+                '</div>';
+        }).join('');
+
+        attachDragEvents();
     }
 
     function attachDragEvents() {
@@ -288,7 +495,7 @@
         document.querySelectorAll('#questionList .card').forEach(item => {
             item.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                const dragging = document.querySelector('[data-id="' + draggedId + '"]');
+                const dragging = document.querySelector('#questionList [data-id="' + draggedId + '"]');
                 if (dragging && dragging !== item) {
                     const rect = item.getBoundingClientRect();
                     const isAfter = e.clientY > rect.top + rect.height / 2;
