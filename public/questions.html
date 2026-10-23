@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="puzzle.css">
     <style>
         html, body { height:100%; }
-        .qpage { max-width:1200px; margin:0 auto; padding:20px; height:100vh; box-sizing:border-box; display:flex; flex-direction:column; }
+        .qpage { max-width:min(1700px,96vw); margin:0 auto; padding:20px; height:100vh; box-sizing:border-box; display:flex; flex-direction:column; }
         .qlayout { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; }
         .qcard { min-height:0; display:flex; flex-direction:column; overflow:hidden; margin:0; }
         .qcard-body { flex:1; min-height:0; overflow-y:auto; padding-right:6px; }
@@ -518,5 +518,6 @@
 
     loadQuestionList();
 </script>
+<script src="fullscreen.js"></script>
 </body>
 </html>
