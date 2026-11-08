@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
+const { syncQuestions } = require('./sync');
 
 const app = express();
 const server = http.createServer(app);
@@ -437,6 +438,12 @@ function generatePin() {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server avviato su http://localhost:${PORT}`);
+// All'avvio scarica le domande aggiornate da GitHub (se configurato), poi parte il server.
+// Se GitHub non e' raggiungibile si usano le domande gia' presenti in locale.
+syncQuestions().then(result => {
+    console.log('[sync] ' + result.message);
+}).finally(() => {
+    server.listen(PORT, () => {
+        console.log(`Server avviato su http://localhost:${PORT}`);
+    });
 });
