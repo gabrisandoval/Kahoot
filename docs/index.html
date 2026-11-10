@@ -6,6 +6,11 @@
 <meta name="theme-color" content="#1A1B2E">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Domande">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Quiz Live - Domande</title>
 <style>
 :root {
@@ -58,7 +63,7 @@ input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blu
 .q.off { opacity:.5; }
 .q .thumb { width:56px; height:56px; border-radius:8px; background:var(--paper) center/cover; flex:none; display:grid; place-items:center; font-size:22px; }
 .q .body { flex:1; min-width:0; }
-.q .t { font-weight:700; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; .q .t { font-weight:700; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; } -webkit-box-orient:vertical; }
+.q .t { font-weight:700; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .q .m { font-size:13px; opacity:.7; margin-top:2px; }
 .q .acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .q .acts button { border:1px solid var(--line); background:#fff; border-radius:9px; padding:6px 10px; font-size:14px; cursor:pointer; }
@@ -102,21 +107,24 @@ input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blu
     <header class="top"><h1>Collega GitHub</h1><button class="iconbtn" id="setupClose" title="Chiudi">✕</button></header>
     <div class="wrap">
         <div class="card">
-            <p style="margin-top:0">L'app legge e scrive <b>server/questions.json</b> direttamente nel repository GitHub del progetto, cos&igrave; non serve avviare il PC.</p>
-            <label class="f">Utente / organizzazione GitHub</label>
-            <input type="text" id="cOwner" autocapitalize="none" autocomplete="off" placeholder="es. luigi99">
-            <label class="f">Nome repository</label>
-            <input type="text" id="cRepo" autocapitalize="none" autocomplete="off" placeholder="es. quiz-live">
-            <label class="f">Branch</label>
-            <input type="text" id="cBranch" autocapitalize="none" autocomplete="off" value="main">
-            <label class="f">Percorso del file</label>
-            <input type="text" id="cPath" autocapitalize="none" autocomplete="off" value="server/questions.json">
-            <label class="f">Token di accesso (Personal Access Token)</label>
+            <p style="margin-top:0">L'app legge e scrive <b>server/questions.json</b> nel repository GitHub del progetto, cos&igrave; non serve avviare il PC.</p>
+            <label class="f">Token di accesso (facoltativo ora)</label>
             <input type="password" id="cToken" autocapitalize="none" autocomplete="off" placeholder="github_pat_...">
-            <p class="hint">Crealo su GitHub: Settings &rarr; Developer settings &rarr; Fine-grained tokens, solo per questo repository, permesso <b>Contents: Read and write</b>. Resta salvato solo in questo telefono.</p>
+            <p class="hint">Crealo su GitHub: Settings &rarr; Developer settings &rarr; Fine-grained tokens, solo per questo repository, permesso <b>Contents: Read and write</b>. Resta salvato solo in questo telefono. Puoi anche lasciarlo vuoto: te lo chiede l'app quando premi \u201cSalva su GitHub\u201d.</p>
+            <details style="margin-top:14px">
+                <summary style="font-weight:600;cursor:pointer">Repository (gi&agrave; compilato)</summary>
+                <label class="f">Utente / organizzazione GitHub</label>
+                <input type="text" id="cOwner" autocapitalize="none" autocomplete="off">
+                <label class="f">Nome repository</label>
+                <input type="text" id="cRepo" autocapitalize="none" autocomplete="off">
+                <label class="f">Branch</label>
+                <input type="text" id="cBranch" autocapitalize="none" autocomplete="off">
+                <label class="f">Percorso del file</label>
+                <input type="text" id="cPath" autocapitalize="none" autocomplete="off">
+            </details>
             <p id="setupErr" class="err hidden"></p>
             <div class="row" style="margin-top:14px">
-                <button class="btn accent grow" id="setupSave">Salva e carica</button>
+                <button class="btn accent grow" id="setupSave">Continua</button>
             </div>
             <div class="row" style="margin-top:10px">
                 <button class="btn ghost small grow" id="forget">Scollega questo telefono</button>
@@ -228,6 +236,19 @@ input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blu
     </div>
 </section>
 
+<div id="tokenModal" class="hidden" style="position:fixed;inset:0;z-index:70;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px">
+    <div class="card" style="width:min(420px,100%)">
+        <h2 style="margin:0 0 6px;font-size:18px">Token GitHub</h2>
+        <p class="hint" style="margin:0 0 8px">Per salvare serve il token. Lo incolli una volta sola: resta in questo telefono.</p>
+        <input type="password" id="tmInput" autocapitalize="none" autocomplete="off" placeholder="github_pat_...">
+        <p id="tmErr" class="err"></p>
+        <div class="row" style="margin-top:12px">
+            <button class="btn ghost grow" id="tmNo">Annulla</button>
+            <button class="btn accent grow" id="tmOk">Salva</button>
+        </div>
+    </div>
+</div>
+
 <div id="toast" class="hidden"></div>
 
 <script>
@@ -235,6 +256,8 @@ input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blu
 //  Stato
 // ============================================================
 const LS_KEY = 'quizAdminCfg';
+// Valori gia' pronti: sul telefono basta inserire il token (solo per modificare)
+const DEFAULTS = { owner: 'gabrisandoval', repo: 'Kahoot', branch: 'main', path: 'server/questions.json', token: '' };
 const DRAFT_KEY = 'quizAdminDraft';
 let cfg = null;
 let questions = [];
@@ -266,11 +289,12 @@ function apiUrl(p) {
     return 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) + p.replace('{path}', enc);
 }
 function headers(extra) {
-    return Object.assign({
-        'Authorization': 'Bearer ' + cfg.token,
+    const h = {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28'
-    }, extra || {});
+    };
+    if (cfg.token) h['Authorization'] = 'Bearer ' + cfg.token;   // senza token: sola lettura (repo pubblico)
+    return Object.assign(h, extra || {});
 }
 async function gh(url, opts) {
     let res;
@@ -279,9 +303,9 @@ async function gh(url, opts) {
     if (!res.ok) {
         let msg = '';
         try { msg = (await res.json()).message || ''; } catch (e) {}
-        if (res.status === 401) throw new Error('Token non valido o scaduto');
+        if (res.status === 401) { const e = new Error('Token non valido o scaduto'); e.auth = true; throw e; }
         if (res.status === 403) throw new Error('Permesso negato (' + (msg || 'controlla i permessi del token') + ')');
-        if (res.status === 404) throw new Error('File o repository non trovato (controlla utente, repo, branch e percorso)');
+        if (res.status === 404) throw new Error('File o repository non trovato (controlla utente, repo, branch e percorso; se il repository \u00e8 privato serve il token)');
         if (res.status === 409 || res.status === 422) { const e = new Error('conflict'); e.conflict = true; throw e; }
         throw new Error('Errore GitHub ' + res.status + (msg ? ': ' + msg : ''));
     }
@@ -368,8 +392,24 @@ async function loadAll(force) {
     }
 }
 
+function askToken(msg) {
+    return new Promise(resolve => {
+        $('tmErr').textContent = msg || ''; $('tmInput').value = '';
+        show('tokenModal'); setTimeout(() => $('tmInput').focus(), 50);
+        const done = ok => { hide('tokenModal'); $('tmOk').onclick = null; $('tmNo').onclick = null; resolve(ok); };
+        $('tmNo').onclick = () => done(false);
+        $('tmOk').onclick = () => {
+            const t = $('tmInput').value.trim();
+            if (!t) { $('tmErr').textContent = 'Incolla il token'; return; }
+            cfg.token = t; lsSet(LS_KEY, cfg); done(true);
+        };
+    });
+}
+
 async function pushNow() {
     if (!dirty) return;
+    if (!cfg.token && !(await askToken())) return;
+    let retry = false;
     const btn = $('pushBtn');
     btn.disabled = true; btn.textContent = 'Salvo...';
     try {
@@ -388,11 +428,15 @@ async function pushNow() {
                     toast('Salvato su GitHub ✔');
                 } catch (e2) { toast(e2.message, true); }
             }
+        } else if (e.auth) {
+            cfg.token = ''; lsSet(LS_KEY, cfg);
+            retry = true;
         } else toast(e.message, true);
     } finally {
         btn.textContent = 'Salva su GitHub';
         btn.disabled = !dirty;
     }
+    if (retry && await askToken('Token non valido o scaduto: inseriscine uno nuovo')) return pushNow();
 }
 
 function changed() { setDirty(true); render(); }
@@ -513,7 +557,7 @@ $('mSettings').onclick = () => { hide('menu'); openSetup(true); };
 //  Impostazioni
 // ============================================================
 function openSetup(canClose) {
-    const c = cfg || {};
+    const c = Object.assign({}, DEFAULTS, cfg || {});
     $('cOwner').value = c.owner || ''; $('cRepo').value = c.repo || '';
     $('cBranch').value = c.branch || 'main'; $('cPath').value = c.path || 'server/questions.json';
     $('cToken').value = c.token || '';
@@ -527,7 +571,7 @@ $('setupSave').onclick = async () => {
         branch: $('cBranch').value.trim() || 'main',
         path: $('cPath').value.trim().replace(/^\/+/, ''), token: $('cToken').value.trim()
     };
-    if (!next.owner || !next.repo || !next.path || !next.token) {
+    if (!next.owner || !next.repo || !next.path) {
         $('setupErr').textContent = 'Compila tutti i campi'; show('setupErr'); return;
     }
     const prev = cfg; cfg = next;
@@ -539,12 +583,12 @@ $('setupSave').onclick = async () => {
         await loadAll(!!prev);
     } catch (e) {
         cfg = prev; $('setupErr').textContent = e.message; show('setupErr');
-    } finally { btn.disabled = false; btn.textContent = 'Salva e carica'; }
+    } finally { btn.disabled = false; btn.textContent = 'Continua'; }
 };
 $('forget').onclick = () => {
     if (!confirm('Rimuovere token e impostazioni da questo telefono?')) return;
-    lsDel(LS_KEY); lsDel(DRAFT_KEY); cfg = null; questions = [];
-    openSetup(false);
+    lsDel(LS_KEY); lsDel(DRAFT_KEY); cfg = Object.assign({}, DEFAULTS); questions = [];
+    openSetup(true);
 };
 
 // ============================================================
@@ -748,9 +792,8 @@ window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); 
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-cfg = lsGet(LS_KEY);
-if (cfg && cfg.token) { show('main'); loadAll(false); }
-else openSetup(false);
+cfg = Object.assign({}, DEFAULTS, lsGet(LS_KEY) || {});
+show('main'); loadAll(false);
 </script>
 </body>
 </html>
