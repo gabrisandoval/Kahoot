@@ -135,5 +135,17 @@
     "correctIndex": 1,
     "timeLimit": 20,
     "enabled": false
+  },
+  {
+    "id": "1794342253795",
+    "question": "Quanti anni ho",
+    "options": [
+      "20",
+      "12",
+      "10",
+      "5"
+    ],
+    "correctIndex": 3,
+    "timeLimit": 20
   }
 ]
