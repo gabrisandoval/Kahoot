@@ -14,7 +14,7 @@
     #questionScreen { height:100%; flex-direction:column; align-items:center; justify-content:center; gap:1.2vh; }
     #questionScreen > * { margin-top:0 !important; margin-bottom:0 !important; }
     #questionScreen > * { flex-shrink:0; }
-    .stage { padding:16px !important; }
+    .stage { padding:8px 10px !important; }
     #optionsLegend { width:min(700px,100%); flex:0 0 auto !important; }
     #optionsLegend .option-btn { min-height:clamp(64px,14vh,120px) !important; }
     #questionText { font-size:clamp(20px,4.5vh,40px) !important; }
@@ -479,9 +479,14 @@
     document.getElementById('questionScreen').style.display = 'none';
     document.getElementById('scoreboardScreen').style.display = 'none';
     document.getElementById('resultsScreen').style.display = 'block';
-    document.getElementById('leaderboard').innerHTML = leaderboard.slice(0, TOP_N).map((p, i) =>
-      '<div class="leaderboard-row"><span class="player-name"><span class="rank">' + (i + 1) + '</span>' + escapeHtml(p.nickname) + '</span><span class="player-score">' + p.score + '</span></div>'
-    ).join('');
+    // ordine per punti (sicurezza anche lato pagina); a parita' di punti stessa posizione
+    const ranked = leaderboard
+      .map((p, i) => ({ nickname: p.nickname, score: Number(p.score) || 0, i }))
+      .sort((a, b) => (b.score - a.score) || (a.i - b.i));
+    document.getElementById('leaderboard').innerHTML = ranked.slice(0, TOP_N).map((p) => {
+      const rank = ranked.findIndex(x => x.score === p.score) + 1;
+      return '<div class="leaderboard-row"><span class="player-name"><span class="rank">' + rank + '</span>' + escapeHtml(p.nickname) + '</span><span class="player-score">' + p.score + '</span></div>';
+    }).join('');
   });
 
   socket.on('game-restarted', () => {

@@ -121,6 +121,22 @@ function generatePuzzleOrder() {
     return order;
 }
 
+// Classifica ordinata per punti (a parita' di punti resta prima chi e' entrato prima)
+function buildLeaderboard(room) {
+    return Object.values(room.players)
+        .map((p, i) => ({ p, i }))
+        .sort((a, b) => (b.p.score - a.p.score) || (a.i - b.i))
+        .map(({ p }) => p);
+}
+
+// Aspetta che arrivino le ultime risposte (puzzle inviati dal timer dei telefoni) prima di mostrare una classifica
+function whenScoresSettled(room, fn) {
+    clearTimeout(room.boardTimer);
+    const wait = (room.settleAt || 0) - Date.now();
+    if (wait > 0) room.boardTimer = setTimeout(fn, wait);
+    else fn();
+}
+
 // Durata dell'immagine di introduzione prima di ogni domanda (millisecondi)
 const INTRO_MS = 3000;
 
@@ -203,11 +219,11 @@ io.on('connection', (socket) => {
         const q = QUESTIONS[room.currentQuestionIndex];
 
         if (!q) {
-            const leaderboard = Object.values(room.players)
-                .sort((a, b) => b.score - a.score)
-                .map(p => ({ nickname: p.nickname, score: p.score }));
-
-            io.to(pin).emit('game-over', leaderboard);
+            whenScoresSettled(room, () => {
+                const leaderboard = buildLeaderboard(room)
+                    .map(p => ({ nickname: p.nickname, score: p.score }));
+                io.to(pin).emit('game-over', leaderboard);
+            });
             return;
         }
 
@@ -226,6 +242,8 @@ io.on('connection', (socket) => {
         // 1) immagine di introduzione: la mostra solo l'host, i telefoni restano vuoti
         clearTimeout(room.introTimer);
         clearTimeout(room.endTimer);
+        clearTimeout(room.boardTimer);
+        room.settleAt = 0;
         io.to(pin).emit('round-intro', {
             kind: getQuestionKind(q),
             questionNumber: room.currentQuestionIndex + 1,
@@ -240,6 +258,8 @@ io.on('connection', (socket) => {
         }, INTRO_MS);
 
         function sendQuestion() {
+        // dopo questo istante tutte le risposte (anche i puzzle inviati dal timer dei telefoni) sono arrivate
+        room.settleAt = Date.now() + q.timeLimit * 1000 + (isPuzzle ? 3300 : 600);
         io.to(pin).emit('new-question', {
             type: isPuzzle ? 'puzzle' : 'standard',
             question: q.question,
@@ -349,6 +369,8 @@ io.on('connection', (socket) => {
 
         clearTimeout(room.introTimer);
         clearTimeout(room.endTimer);
+        clearTimeout(room.boardTimer);
+        room.settleAt = 0;
         room.questionStartTime = null;
         room.currentQuestionIndex = -1;
         room.answers = {};
@@ -389,15 +411,16 @@ io.on('connection', (socket) => {
 
         clearTimeout(room.endTimer);
 
-        const leaderboard = Object.values(room.players)
-            .sort((a, b) => b.score - a.score)
-            .map(p => ({
-                nickname: p.nickname,
-                score: p.score,
-                previous: p.prevScore === undefined ? 0 : p.prevScore // punteggio prima di questa domanda
-            }));
+        whenScoresSettled(room, () => {
+            const leaderboard = buildLeaderboard(room)
+                .map(p => ({
+                    nickname: p.nickname,
+                    score: p.score,
+                    previous: p.prevScore === undefined ? 0 : p.prevScore // punteggio prima di questa domanda
+                }));
 
-        io.to(pin).emit('scoreboard-update', leaderboard);
+            io.to(pin).emit('scoreboard-update', leaderboard);
+        });
     });
 
     // L'host interrompe il gioco e torna subito alla lobby
@@ -407,6 +430,8 @@ io.on('connection', (socket) => {
 
         clearTimeout(room.introTimer);
         clearTimeout(room.endTimer);
+        clearTimeout(room.boardTimer);
+        room.settleAt = 0;
         room.questionStartTime = null;
         room.currentQuestionIndex = -1;
         room.answers = {};
