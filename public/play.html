@@ -220,6 +220,13 @@
   socket.emit('host-rejoin', { pin: currentPin });
   socket.on('host-rejoin-success', () => { nextQuestion(); });
 
+  // Se la connessione dell'host cade e torna, riprende il controllo della stanza senza far ripartire la partita
+  let hostFirstConnect = true;
+  socket.on('connect', () => {
+    if (!hostFirstConnect) socket.emit('host-reclaim', { pin: currentPin });
+    hostFirstConnect = false;
+  });
+
   function nextQuestion() { socket.emit('host-next-question', { pin: currentPin }); }
   function advance() { socket.emit('host-show-scoreboard', { pin: currentPin }); }
   function goHome() {

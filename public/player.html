@@ -29,9 +29,36 @@
     const socket = io();
     let currentPin = null;
 
+    // --- identita' del giocatore: serve a rientrare nella partita dopo una disconnessione ---
+    const SESSION_KEY = 'quizPlayerSession';
+    const ID_KEY = 'quizPlayerId';
+    function store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function drop(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+    let playerId = load(ID_KEY);
+    if (!playerId) {
+        playerId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'p' + Date.now() + Math.random().toString(36).slice(2);
+        store(ID_KEY, playerId);
+    }
+
+    function readSession() {
+        try {
+            const s = JSON.parse(load(SESSION_KEY));
+            if (s && s.pin && s.nickname && Date.now() - s.t < 6 * 3600 * 1000) return s;
+        } catch (e) {}
+        return null;
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const pinFromUrl = urlParams.get('pin');
     if (pinFromUrl) document.getElementById('pinInput').value = pinFromUrl;
+
+    // se si scansiona il QR di un'altra stanza, la vecchia sessione non vale piu'
+    (function () { const s = readSession(); if (s && pinFromUrl && pinFromUrl !== s.pin) drop(SESSION_KEY); })();
+
+    let pendingJoin = null;   // dati dell'ingresso in corso
+    let autoRejoin = false;
 
     function joinRoom() {
         const pin = document.getElementById('pinInput').value.trim();
@@ -40,11 +67,31 @@
             document.getElementById('message').innerText = 'Inserisci PIN e nome';
             return;
         }
-        socket.emit('player-join', { pin, nickname });
+        autoRejoin = false;
+        pendingJoin = { pin, nickname };
+        socket.emit('player-join', { pin, nickname, playerId });
     }
+
+    // Ad ogni (ri)connessione il telefono rientra da solo nella stanza dove era
+    socket.on('connect', () => {
+        const sess = readSession();
+        if (!sess) return;
+        autoRejoin = true;
+        pendingJoin = { pin: sess.pin, nickname: sess.nickname };
+        document.getElementById('message').innerText = 'Riconnessione...';
+        socket.emit('player-join', { pin: sess.pin, nickname: sess.nickname, playerId });
+    });
+
+    // quando il telefono si risveglia, riconnette subito senza aspettare
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && socket.disconnected) socket.connect();
+    });
+    window.addEventListener('online', () => { if (socket.disconnected) socket.connect(); });
 
     socket.on('join-success', ({ pin, nickname }) => {
         currentPin = pin;
+        if (pendingJoin) store(SESSION_KEY, JSON.stringify({ pin, nickname, t: Date.now() }));
+        document.getElementById('message').innerText = '';
         document.getElementById('joinScreen').innerHTML =
             '<div style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:16px;">' +
             '<h1 style="font-family:var(--font-display); font-size:clamp(56px,20vw,100px); line-height:1.0; margin-bottom:24px;">Ciao ' + nickname + '!</h1>' +
@@ -53,6 +100,15 @@
     });
 
     socket.on('join-error', (msg) => {
+        if (autoRejoin) {
+            // la stanza non esiste piu' (o non ti riconosce): torna alla schermata di ingresso
+            drop(SESSION_KEY);
+            autoRejoin = false;
+            currentPin = null;
+            clearInterval(playerCountdown);
+            questionEl.innerHTML = '';
+            document.getElementById('joinScreen').style.display = 'flex';
+        }
         document.getElementById('message').innerText = msg;
     });
 
@@ -84,7 +140,7 @@
         questionEl.innerHTML = '';
     });
 
-    socket.on('new-question', ({ type, options, timeLimit, imageData, puzzleOrder: order }) => {
+    socket.on('new-question', ({ type, options, timeLimit, imageData, puzzleOrder: order, answered }) => {
         document.getElementById('joinScreen').style.display = 'none';
 
         pendingResult = null;
@@ -95,10 +151,14 @@
 
         if (type === 'puzzle') {
             isPuzzle = true;
-            startPuzzle(order, imageData);
+            if (answered) {            // rientro dopo aver gia' inviato il puzzle
+                puzzleSent = true;
+                questionEl.innerHTML = waitingBox('Puzzle inviato!<br>In attesa dello scadere del tempo...');
+            } else startPuzzle(order, imageData);
         } else {
             isPuzzle = false;
-            showOptions(options);
+            if (answered) questionEl.innerHTML = waitingBox('Hai risposto!<br>In attesa dello scadere del tempo...');
+            else showOptions(options);
         }
 
         // conto alla rovescia silenzioso: nessun timer visibile
@@ -177,6 +237,16 @@
             if (timeIsUp) revealResult();
         }
     }
+
+    // rientro a tempo gia' scaduto: mostra il risultato se c'e', altrimenti aspetta la prossima domanda
+    socket.on('rejoin-wait', ({ result }) => {
+        document.getElementById('joinScreen').style.display = 'none';
+        clearInterval(playerCountdown);
+        timeIsUp = true;
+        pendingResult = result;
+        if (result) revealResult();
+        else questionEl.innerHTML = waitingBox('In attesa della prossima domanda...');
+    });
 
     // ---------- risultato ----------
     socket.on('answer-result', (res) => {

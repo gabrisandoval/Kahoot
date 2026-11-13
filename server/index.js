@@ -137,6 +137,49 @@ function whenScoresSettled(room, fn) {
     else fn();
 }
 
+// Giocatori ancora collegati (quelli temporaneamente offline restano nella partita ma non contano nei totali)
+function connectedCount(room) {
+    return Object.values(room.players).filter(p => p.connected !== false).length;
+}
+
+function playerNames(room) {
+    return Object.values(room.players).map(p => p.nickname);
+}
+
+// Dopo un rientro: rimanda al telefono cio' che sta succedendo (domanda in corso, risultato, classifica finale)
+function sendPlayerState(room, socket, player) {
+    if (room.gameOver) {
+        const leaderboard = buildLeaderboard(room).map(p => ({ nickname: p.nickname, score: p.score }));
+        socket.emit('game-over', leaderboard);
+        return;
+    }
+    const q = loadActiveQuestions()[room.currentQuestionIndex];
+    if (!q || !room.questionStartTime) return; // in attesa / immagine di introduzione: arrivera' new-question
+
+    const remaining = Math.ceil(q.timeLimit - (Date.now() - room.questionStartTime) / 1000);
+    const answered = room.answers[socket.id] !== undefined;
+    const isPuzzle = q.type === 'puzzle';
+
+    if (remaining > 0) {
+        socket.emit('new-question', {
+            type: isPuzzle ? 'puzzle' : 'standard',
+            question: q.question,
+            options: q.options || [],
+            timeLimit: remaining,
+            totalPlayers: connectedCount(room),
+            imageData: q.imageData || null,
+            puzzleOrder: isPuzzle ? room.puzzleOrder : null,
+            questionNumber: room.currentQuestionIndex + 1,
+            totalQuestions: loadActiveQuestions().length,
+            answered
+        });
+        if (answered && player.lastResult) socket.emit('answer-result', player.lastResult);
+    } else {
+        // tempo scaduto: mostra il risultato se c'e', altrimenti attende la prossima domanda
+        socket.emit('rejoin-wait', { result: player.lastResult || null });
+    }
+}
+
 // Durata dell'immagine di introduzione prima di ogni domanda (millisecondi)
 const INTRO_MS = 3000;
 
@@ -181,8 +224,8 @@ io.on('connection', (socket) => {
         socket.emit('room-created', { pin });
     });
 
-    // Un giocatore entra nella stanza
-    socket.on('player-join', ({ pin, nickname }) => {
+    // Un giocatore entra nella stanza (o rientra dopo una disconnessione)
+    socket.on('player-join', ({ pin, nickname, playerId }) => {
         const room = rooms[pin];
 
         if (!room) {
@@ -190,20 +233,54 @@ io.on('connection', (socket) => {
             return;
         }
 
+        // Rientro: stesso giocatore (stesso playerId, oppure stesso nome di un giocatore offline)
+        let oldId = null;
+        for (const [sid, p] of Object.entries(room.players)) {
+            if (playerId && p.playerId === playerId) { oldId = sid; break; }
+        }
+        if (!oldId) {
+            for (const [sid, p] of Object.entries(room.players)) {
+                if (p.connected === false && p.nickname === nickname && (!playerId || !p.playerId)) { oldId = sid; break; }
+            }
+        }
+
+        if (oldId) {
+            const p = room.players[oldId];
+            if (oldId !== socket.id) {
+                delete room.players[oldId];
+                room.players[socket.id] = p;
+                if (room.answers[oldId] !== undefined) {
+                    room.answers[socket.id] = room.answers[oldId];
+                    delete room.answers[oldId];
+                }
+            }
+            clearTimeout(p.dropTimer);
+            p.connected = true;
+            if (playerId) p.playerId = playerId;
+            socket.join(pin);
+            socket.data.pin = pin;
+            console.log(`${p.nickname} e' rientrato nella stanza ${pin}`);
+
+            socket.emit('join-success', { pin, nickname: p.nickname, rejoined: true });
+            sendPlayerState(room, socket, p);
+            io.to(room.hostSocketId).emit('player-list-update', playerNames(room));
+            return;
+        }
+
+        // Nuovo giocatore: possibile solo se la stanza non e' chiusa
         if (room.locked) {
             socket.emit('join-error', 'La stanza è chiusa, non è più possibile entrare');
             return;
         }
 
-        room.players[socket.id] = { nickname, score: 0 };
+        room.players[socket.id] = { nickname, score: 0, playerId: playerId || null, connected: true };
         socket.join(pin);
         socket.data.pin = pin;
         console.log(`${nickname} è entrato nella stanza ${pin}`);
 
         socket.emit('join-success', { pin, nickname });
 
-        const playerNames = Object.values(room.players).map(p => p.nickname);
-        io.to(room.hostSocketId).emit('player-list-update', playerNames);
+        io.to(room.hostSocketId).emit('player-list-update', playerNames(room));
     });
 
     // L'host invia la prossima domanda
@@ -222,6 +299,7 @@ io.on('connection', (socket) => {
             whenScoresSettled(room, () => {
                 const leaderboard = buildLeaderboard(room)
                     .map(p => ({ nickname: p.nickname, score: p.score }));
+                room.gameOver = true;
                 io.to(pin).emit('game-over', leaderboard);
             });
             return;
@@ -231,7 +309,8 @@ io.on('connection', (socket) => {
         room.questionStartTime = null; // il timer parte dopo l'immagine di introduzione
 
         // punteggio a inizio domanda: serve per animare i punti guadagnati nella classifica
-        Object.values(room.players).forEach(p => { p.prevScore = p.score; });
+        Object.values(room.players).forEach(p => { p.prevScore = p.score; p.lastResult = null; });
+        room.gameOver = false;
 
         const isPuzzle = q.type === 'puzzle';
         if (isPuzzle) {
@@ -265,7 +344,7 @@ io.on('connection', (socket) => {
             question: q.question,
             options: q.options || [],
             timeLimit: q.timeLimit,
-            totalPlayers: Object.keys(room.players).length,
+            totalPlayers: connectedCount(room),
             imageData: q.imageData || null,
             puzzleOrder: isPuzzle ? room.puzzleOrder : null,
             questionNumber: room.currentQuestionIndex + 1,
@@ -283,7 +362,7 @@ io.on('connection', (socket) => {
                 io.to(room.hostSocketId).emit('question-ended', {
                     counts,
                     correctIndex: q.correctIndex,
-                    totalPlayers: Object.keys(room.players).length
+                    totalPlayers: connectedCount(room)
                 });
             }, q.timeLimit * 1000 + 400); // piccola tolleranza per le risposte in arrivo
         }
@@ -316,9 +395,11 @@ io.on('connection', (socket) => {
             room.players[socket.id].score += points;
         }
 
-        socket.emit('answer-result', { correct: isCorrect, points });
+        const result = { correct: isCorrect, points };
+        room.players[socket.id].lastResult = result;
+        socket.emit('answer-result', result);
 
-        const totalPlayers = Object.keys(room.players).length;
+        const totalPlayers = connectedCount(room);
         const totalAnswers = Object.keys(room.answers).length;
         io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
     });
@@ -355,9 +436,11 @@ io.on('connection', (socket) => {
 
         room.players[socket.id].score += points;
 
-        socket.emit('answer-result', { puzzle: true, correct: complete, correctCount, points });
+        const result = { puzzle: true, correct: complete, correctCount, points };
+        room.players[socket.id].lastResult = result;
+        socket.emit('answer-result', result);
 
-        const totalPlayers = Object.keys(room.players).length;
+        const totalPlayers = connectedCount(room);
         const totalAnswers = Object.keys(room.answers).length;
         io.to(room.hostSocketId).emit('answer-count-update', { totalAnswers, totalPlayers });
     });
@@ -376,7 +459,12 @@ io.on('connection', (socket) => {
         room.answers = {};
         room.locked = false;
 
-        Object.values(room.players).forEach(p => p.score = 0);
+        room.gameOver = false;
+        Object.entries(room.players).forEach(([sid, p]) => {
+            if (p.connected === false) delete room.players[sid]; // chi non e' piu tornato esce dalla stanza
+            else p.score = 0;
+        });
+        io.to(room.hostSocketId).emit('player-list-update', playerNames(room));
 
         console.log('Partita riavviata nella stanza', pin);
         io.to(pin).emit('game-restarted');
@@ -402,6 +490,15 @@ io.on('connection', (socket) => {
 
         const playerNames = Object.values(room.players).map(p => p.nickname);
         socket.emit('host-rejoin-success', { pin, locked: room.locked, players: playerNames });
+    });
+
+    // L'host si e' riconnesso (rete caduta, telefono/PC in standby): riprende il controllo senza ripartire
+    socket.on('host-reclaim', ({ pin }) => {
+        const room = rooms[pin];
+        if (!room) return;
+        room.hostSocketId = socket.id;
+        socket.join(pin);
+        socket.emit('player-list-update', playerNames(room));
     });
 
     // Mostra la classifica intermedia
@@ -437,7 +534,12 @@ io.on('connection', (socket) => {
         room.answers = {};
         room.locked = false;
 
-        Object.values(room.players).forEach(p => p.score = 0);
+        room.gameOver = false;
+        Object.entries(room.players).forEach(([sid, p]) => {
+            if (p.connected === false) delete room.players[sid]; // chi non e' piu tornato esce dalla stanza
+            else p.score = 0;
+        });
+        io.to(room.hostSocketId).emit('player-list-update', playerNames(room));
 
         console.log('Partita interrotta nella stanza', pin);
         io.to(pin).emit('game-stopped');
@@ -450,10 +552,20 @@ io.on('connection', (socket) => {
         const room = rooms[pin];
         if (!room) return;
 
-        if (room.players[socket.id]) {
-            delete room.players[socket.id];
-            const playerNames = Object.values(room.players).map(p => p.nickname);
-            io.to(room.hostSocketId).emit('player-list-update', playerNames);
+        const p = room.players[socket.id];
+        if (!p) return;
+
+        // Il giocatore NON viene eliminato: puo' rientrare e ritrova punteggio e domanda in corso.
+        p.connected = false;
+
+        if (room.currentQuestionIndex < 0 && !room.locked) {
+            // in lobby, se non torna entro 30 secondi esce dall'elenco
+            p.dropTimer = setTimeout(() => {
+                if (p.connected === false && room.players[socket.id] === p) {
+                    delete room.players[socket.id];
+                    io.to(room.hostSocketId).emit('player-list-update', playerNames(room));
+                }
+            }, 30000);
         }
     });
 });
