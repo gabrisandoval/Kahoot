@@ -164,7 +164,8 @@
     5:  'music/5s.mp3',
     10: 'music/10s.mp3',
     20: 'music/20s.mp3',
-    30: 'music/30s.mp3'
+    30: 'music/30s.mp3',
+    60: 'music/30s.mp3'   // 60 secondi: la musica da 30s va due volte (l'audio e' in loop e si ferma allo scadere del tempo)
   };
 
   function musicFileFor(seconds) {
@@ -174,7 +175,7 @@
   }
 
   // Precarica i file per partire senza ritardi
-  Object.values(MUSIC_FILES).forEach(f => { const a = new Audio(); a.preload = 'auto'; a.src = f; });
+  new Set(Object.values(MUSIC_FILES)).forEach(f => { const a = new Audio(); a.preload = 'auto'; a.src = f; });
 
   // Parte quando compare la domanda (dopo l'immagine) e dura quanto il tempo
   function startQuestionMusic(timeLimit) {
