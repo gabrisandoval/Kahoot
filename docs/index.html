@@ -224,8 +224,14 @@ input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blu
             </div>
 
             <label class="f">Tempo (secondi)</label>
-            <input type="number" id="eTime" min="5" max="120" value="20" inputmode="numeric">
-            <p class="hint">Musiche dedicate per 5, 10, 20, 30 e 60 secondi (60 = la musica da 30s due volte).</p>
+            <select id="eTime">
+                <option value="5">5 secondi</option>
+            <option value="10">10 secondi</option>
+            <option value="20" selected>20 secondi</option>
+            <option value="30">30 secondi</option>
+            <option value="60">60 secondi</option>
+            </select>
+            <p class="hint">Il tempo si sceglie tra 5, 10, 20, 30 e 60 secondi (60 = la musica da 30s due volte).</p>
 
             <p id="edErr" class="err hidden"></p>
             <div class="row" style="margin-top:16px">
@@ -687,6 +693,20 @@ $('eImgFile').onchange = async e => {
     } catch (err) { showEdErr(err.message); }
 };
 
+// Tempi ammessi: 5, 10, 20, 30, 60 (default 20). Una domanda vecchia con un altro tempo lo mantiene
+// finche' la modifichi, mostrato come "(attuale)".
+function setTime(v) {
+    const sel = $('eTime');
+    sel.querySelectorAll('option[data-legacy]').forEach(o => o.remove());
+    v = String(v);
+    if (![...sel.options].some(o => o.value === v)) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v + ' secondi (attuale)'; o.dataset.legacy = '1';
+        sel.appendChild(o);
+    }
+    sel.value = v;
+}
+
 function showEdErr(m) { $('edErr').textContent = m; show('edErr'); }
 
 function applyType() {
@@ -702,7 +722,7 @@ $('eType').addEventListener('change', () => {
     applyType();
     if (t === 'puzzle') {
         if (!editingId || !$('eText').value.trim()) $('eText').value = $('eText').value.trim() || 'Completa il puzzle';
-        if (lastType !== 'puzzle' && ($('eTime').value === '20' || !$('eTime').value)) $('eTime').value = 30;
+        if (lastType !== 'puzzle' && ($('eTime').value === '20' || !$('eTime').value)) setTime(30);
     }
     lastType = t;
 });
@@ -716,14 +736,14 @@ function openEditor(id) {
 
     if (!id) {
         $('edTitle').textContent = 'Nuova domanda';
-        $('eType').value = 'multiple'; $('eText').value = ''; $('eTime').value = 20;
+        $('eType').value = 'multiple'; $('eText').value = ''; setTime(20);
         lastType = 'multiple';
     } else {
         const q = questions.find(x => x.id === id);
         const k = kindOf(q);
         $('edTitle').textContent = 'Modifica domanda';
         $('eType').value = k; lastType = k;
-        $('eText').value = q.question || ''; $('eTime').value = q.timeLimit || 20;
+        $('eText').value = q.question || ''; setTime(q.timeLimit || 20);
         if (k === 'multiple' || k === 'image') {
             document.querySelectorAll('.oText').forEach((o, i) => o.value = (q.options || [])[i] || '');
             const r = document.querySelector('input[name=ok][value="' + q.correctIndex + '"]'); if (r) r.checked = true;

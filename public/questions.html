@@ -1,523 +1,799 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <title>Aggiungi domande</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="puzzle.css">
-    <style>
-        html, body { height:100%; }
-        .qpage { max-width:min(1700px,96vw); margin:0 auto; padding:20px; height:100vh; box-sizing:border-box; display:flex; flex-direction:column; }
-        .qlayout { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; }
-        .qcard { min-height:0; display:flex; flex-direction:column; overflow:hidden; margin:0; }
-        .qcard-body { flex:1; min-height:0; overflow-y:auto; padding-right:6px; }
-        .qcard h1, .qcard h2 { margin:0 0 12px; font-family:var(--font-display); }
-        @media (max-width:800px) {
-            .qpage { height:auto; display:block; }
-            .qlayout { grid-template-columns:1fr; }
-            .qcard { overflow:visible; }
-            #formCard { }
-            #listCard .qcard-body { max-height:60vh; overflow-y:auto; }
-        }
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1A1B2E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Domande">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Quiz Live - Domande</title>
+<style>
+:root {
+    --ink:#1A1B2E; --paper:#F6F3EC; --card:#fff; --line:#E2DDD0;
+    --coral:#FF5A4E; --blue:#2F6BFF; --green:#1FA971; --amber:#F2A900;
+    --radius:14px;
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+body { padding-bottom:calc(90px + env(safe-area-inset-bottom)); }
+button, input, select, textarea { font:inherit; color:inherit; }
+.hidden { display:none !important; }
+
+header.top {
+    position:sticky; top:0; z-index:20; background:var(--ink); color:#fff;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 10px; display:flex; align-items:center; gap:10px;
+}
+header.top h1 { font-size:18px; margin:0; flex:1; }
+.chip { font-size:12px; padding:3px 9px; border-radius:99px; background:#ffffff22; white-space:nowrap; }
+.chip.dirty { background:var(--amber); color:#000; }
+.iconbtn { background:none; border:0; color:#fff; font-size:22px; padding:4px 8px; cursor:pointer; }
+
+.wrap { max-width:760px; margin:0 auto; padding:12px 14px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }
+
+.btn { border:0; border-radius:12px; padding:13px 16px; font-weight:700; cursor:pointer; background:var(--ink); color:#fff; }
+.btn.accent { background:var(--coral); }
+.btn.blue { background:var(--blue); }
+.btn.ghost { background:transparent; color:var(--ink); border:2px solid var(--ink); }
+.btn.small { padding:8px 12px; font-size:14px; border-radius:10px; }
+.btn:disabled { opacity:.45; }
+.row { display:flex; gap:8px; align-items:center; }
+.row > * { min-width:0; }
+.grow { flex:1; }
+
+label.f { display:block; font-weight:600; font-size:14px; margin:12px 0 4px; }
+input[type=text], input[type=password], input[type=number], select, textarea {
+    width:100%; padding:12px; border:2px solid var(--line); border-radius:10px; background:#fff;
+}
+textarea { min-height:84px; resize:vertical; }
+input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blue); }
+.hint { font-size:13px; opacity:.7; margin:6px 0 0; }
+.err { color:var(--coral); font-weight:600; margin:10px 0 0; }
+
+/* lista */
+.tools { display:flex; gap:8px; margin-bottom:10px; }
+.tools input { flex:1; }
+.tools select { width:auto; }
+.q { display:flex; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px; margin-bottom:10px; }
+.q.off { opacity:.5; }
+.q .thumb { width:56px; height:56px; border-radius:8px; background:var(--paper) center/cover; flex:none; display:grid; place-items:center; font-size:22px; }
+.q .body { flex:1; min-width:0; }
+.q .t { font-weight:700; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.q .m { font-size:13px; opacity:.7; margin-top:2px; }
+.q .acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.q .acts button { border:1px solid var(--line); background:#fff; border-radius:9px; padding:6px 10px; font-size:14px; cursor:pointer; }
+.q .acts button.del { color:var(--coral); }
+.q .sw { align-self:flex-start; transform:scale(1.3); margin:4px 6px 0 2px; }
+.empty { text-align:center; padding:40px 10px; opacity:.6; }
+
+.bar {
+    position:fixed; left:0; right:0; bottom:0; z-index:25; background:var(--paper);
+    border-top:1px solid var(--line); padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    display:flex; gap:10px; justify-content:center;
+}
+.bar .btn { flex:1; max-width:360px; }
+
+/* editor */
+#editor { position:fixed; inset:0; z-index:40; background:var(--paper); overflow-y:auto; }
+.opt { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.opt input[type=radio] { width:24px; height:24px; accent-color:var(--green); flex:none; }
+.opt .dot { width:26px; text-align:center; flex:none; font-size:18px; }
+.cropwrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+#cropBox { position:relative; width:min(320px,100%); aspect-ratio:1; border:2px solid var(--ink); border-radius:12px; overflow:hidden; touch-action:none; background:#ddd; }
+#cropCanvas { width:100%; height:100%; display:block; }
+.grid3 { position:absolute; inset:0; pointer-events:none;
+    background:
+      linear-gradient(#fff9,#fff9) 33.33% 0/1px 100% no-repeat,
+      linear-gradient(#fff9,#fff9) 66.66% 0/1px 100% no-repeat,
+      linear-gradient(#fff9,#fff9) 0 33.33%/100% 1px no-repeat,
+      linear-gradient(#fff9,#fff9) 0 66.66%/100% 1px no-repeat; }
+#imgPrev { max-width:100%; max-height:240px; border-radius:10px; display:block; margin:8px auto 0; }
+
+/* toast */
+#toast { position:fixed; left:50%; bottom:calc(90px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:60;
+    background:var(--ink); color:#fff; padding:10px 16px; border-radius:12px; font-weight:600; max-width:90vw; text-align:center; }
+#toast.bad { background:var(--coral); }
+</style>
 </head>
-<body style="background:var(--paper-dim);">
-<div class="qpage">
-    <a href="/index.html"><button class="btn">← Torna alla home</button></a>
+<body>
 
-    <div class="qlayout">
-    <div class="card qcard" id="formCard">
-    <div class="qcard-body">
-        <h1 id="formTitle">Aggiungi una domanda</h1>
-
-        <label style="font-weight:600;">Tipo di domanda</label>
-        <select id="questionType" onchange="toggleQuestionType()" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin:8px 0 16px; font-family:var(--font-body);">
-            <option value="multiple">Risposta multipla</option>
-            <option value="truefalse">Vero o Falso</option>
-            <option value="image">Immagine</option>
-            <option value="puzzle">Puzzle 3×3</option>
-        </select>
-
-        <input id="questionInput" placeholder="Testo della domanda" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:12px; font-family:var(--font-body);">
-
-        <!-- Tipo "Immagine" -->
-        <div id="imageUploadField" style="display:none; margin-bottom:12px;">
-            <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
-            <img id="imagePreview" style="max-width:100%; max-height:200px; margin-top:10px; display:none; border-radius:var(--radius);">
-        </div>
-
-        <!-- Tipo "Puzzle": carica l'immagine e scegli la parte da usare -->
-        <div id="puzzleField" style="display:none; margin-bottom:12px;">
-            <input type="file" id="puzzleFileInput" accept="image/*" onchange="loadPuzzleImage()">
-            <p style="font-size:13px; opacity:.7; margin:10px 0;">Trascina l'immagine per scegliere la parte da usare e ingrandisci con lo slider. La griglia mostra i 9 pezzi.</p>
-            <div id="cropBox" class="crop-box">
-                <img id="cropImg" alt="" draggable="false" style="display:none;">
-                <div class="crop-grid"><span class="v1"></span><span class="v2"></span><span class="h1"></span><span class="h2"></span></div>
+<!-- ============ IMPOSTAZIONI ============ -->
+<section id="setup" class="hidden">
+    <header class="top"><h1>Collega GitHub</h1><button class="iconbtn" id="setupClose" title="Chiudi">✕</button></header>
+    <div class="wrap">
+        <div class="card">
+            <p style="margin-top:0">L'app legge e scrive <b>server/questions.json</b> nel repository GitHub del progetto, cos&igrave; non serve avviare il PC.</p>
+            <label class="f">Token di accesso (facoltativo ora)</label>
+            <input type="password" id="cToken" autocapitalize="none" autocomplete="off" placeholder="github_pat_...">
+            <p class="hint">Crealo su GitHub: Settings &rarr; Developer settings &rarr; Fine-grained tokens, solo per questo repository, permesso <b>Contents: Read and write</b>. Resta salvato solo in questo telefono. Puoi anche lasciarlo vuoto: te lo chiede l'app quando premi \u201cSalva su GitHub\u201d.</p>
+            <details style="margin-top:14px">
+                <summary style="font-weight:600;cursor:pointer">Repository (gi&agrave; compilato)</summary>
+                <label class="f">Utente / organizzazione GitHub</label>
+                <input type="text" id="cOwner" autocapitalize="none" autocomplete="off">
+                <label class="f">Nome repository</label>
+                <input type="text" id="cRepo" autocapitalize="none" autocomplete="off">
+                <label class="f">Branch</label>
+                <input type="text" id="cBranch" autocapitalize="none" autocomplete="off">
+                <label class="f">Percorso del file</label>
+                <input type="text" id="cPath" autocapitalize="none" autocomplete="off">
+            </details>
+            <p id="setupErr" class="err hidden"></p>
+            <div class="row" style="margin-top:14px">
+                <button class="btn accent grow" id="setupSave">Continua</button>
             </div>
-            <input type="range" id="zoomSlider" min="100" max="300" value="100" oninput="onZoom(this.value)" style="width:min(320px,100%); margin-top:10px;">
+            <div class="row" style="margin-top:10px">
+                <button class="btn ghost small grow" id="forget">Scollega questo telefono</button>
+            </div>
         </div>
-
-        <div id="multipleOptions">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="0"><input id="option0" placeholder="Opzione 1" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--coral);"></div>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="1"><input id="option1" placeholder="Opzione 2" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--blue);"></div>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="2"><input id="option2" placeholder="Opzione 3" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--amber);"></div>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;"><input type="radio" name="correctOption" value="3"><input id="option3" placeholder="Opzione 4" style="flex:1; padding:10px; border-radius:var(--radius); border:2px solid var(--green);"></div>
-            <p style="font-size:13px; opacity:.7;">Seleziona il pallino accanto alla risposta corretta</p>
-        </div>
-
-        <div id="trueFalseOptions" style="display:none; margin-bottom:12px;">
-            <label style="display:block; margin-bottom:6px;"><input type="radio" name="tfCorrectOption" value="0"> Vero</label>
-            <label style="display:block;"><input type="radio" name="tfCorrectOption" value="1"> Falso</label>
-        </div>
-
-        <input id="timeLimit" type="number" placeholder="Tempo limite (secondi)" value="15" style="width:100%; padding:12px; border-radius:var(--radius); border:2px solid var(--ink); margin-bottom:16px; font-family:var(--font-body);">
-
-        <div style="display:flex; gap:12px;">
-            <button class="btn btn-accent" onclick="saveQuestion()">Salva domanda</button>
-            <button id="cancelBtn" class="btn" onclick="cancelEdit()" style="display:none;">Annulla modifica</button>
-        </div>
-
-        <p id="message" style="color:var(--coral); font-weight:600;"></p>
-    </div><!-- /qcard-body -->
-    </div><!-- /formCard -->
-
-    <div class="card qcard" id="listCard">
-    <h2>Domande salvate (<span id="questionCount">0</span>)</h2>
-    <div style="display:flex; gap:12px; margin-bottom:12px;">
-        <button class="btn" onclick="toggleAll(true)">Attiva tutte</button>
-        <button class="btn" onclick="toggleAll(false)">Disattiva tutte</button>
     </div>
-    <div id="questionList" class="qcard-body"></div>
-    </div><!-- /listCard -->
-    </div><!-- /qlayout -->
+</section>
+
+<!-- ============ LISTA ============ -->
+<section id="main" class="hidden">
+    <header class="top">
+        <h1>Domande <span class="chip" id="count">0</span></h1>
+        <span class="chip" id="state"></span>
+        <button class="iconbtn" id="menuBtn" title="Menu">⋮</button>
+    </header>
+    <div class="wrap">
+        <div class="tools">
+            <input type="text" id="search" placeholder="Cerca domanda...">
+            <select id="filter">
+                <option value="all">Tutte</option>
+                <option value="multiple">Multipla</option>
+                <option value="truefalse">Vero/Falso</option>
+                <option value="image">Immagine</option>
+                <option value="puzzle">Puzzle</option>
+                <option value="off">Disattivate</option>
+            </select>
+        </div>
+        <div class="row" style="margin-bottom:10px">
+            <button class="btn ghost small grow" id="allOn">Attiva tutte</button>
+            <button class="btn ghost small grow" id="allOff">Disattiva tutte</button>
+        </div>
+        <div id="list"></div>
+    </div>
+    <div class="bar">
+        <button class="btn blue" id="addBtn">＋ Nuova domanda</button>
+        <button class="btn accent" id="pushBtn" disabled>Salva su GitHub</button>
+    </div>
+</section>
+
+<!-- ============ MENU ============ -->
+<div id="menu" class="hidden" style="position:fixed;inset:0;z-index:50;background:#0006" >
+    <div class="card" style="position:absolute;top:calc(56px + env(safe-area-inset-top));right:12px;display:flex;flex-direction:column;gap:8px;min-width:230px">
+        <button class="btn ghost small" id="mReload">Ricarica da GitHub</button>
+        <button class="btn ghost small" id="mExport">Scarica copia JSON</button>
+        <button class="btn ghost small" id="mImport">Importa JSON...</button>
+        <button class="btn ghost small" id="mSettings">Impostazioni GitHub</button>
+        <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+    </div>
 </div>
 
+<!-- ============ EDITOR ============ -->
+<section id="editor" class="hidden">
+    <header class="top"><button class="iconbtn" id="edBack">←</button><h1 id="edTitle">Nuova domanda</h1></header>
+    <div class="wrap">
+        <div class="card">
+            <label class="f">Tipo di domanda</label>
+            <select id="eType">
+                <option value="multiple">Risposta multipla</option>
+                <option value="truefalse">Vero / Falso</option>
+                <option value="image">Domanda con immagine</option>
+                <option value="puzzle">Puzzle 3×3</option>
+            </select>
+
+            <label class="f">Testo della domanda</label>
+            <textarea id="eText" placeholder="Scrivi la domanda"></textarea>
+
+            <div id="boxImage" class="hidden">
+                <label class="f">Immagine</label>
+                <input type="file" id="eImgFile" accept="image/*">
+                <img id="imgPrev" class="hidden" alt="">
+            </div>
+
+            <div id="boxPuzzle" class="hidden">
+                <label class="f">Immagine del puzzle (trascina per scegliere la parte)</label>
+                <input type="file" id="ePzFile" accept="image/*">
+                <div class="cropwrap" style="margin-top:10px">
+                    <div id="cropBox"><canvas id="cropCanvas" width="320" height="320"></canvas><div class="grid3"></div></div>
+                    <input type="range" id="zoom" min="100" max="400" value="100" style="width:min(320px,100%)">
+                    <p class="hint" style="margin:0">Zoom e trascinamento: la parte dentro il quadrato diventa il puzzle.</p>
+                </div>
+            </div>
+
+            <div id="boxMultiple">
+                <label class="f">Risposte (tocca il cerchio della corretta)</label>
+                <div class="opt"><span class="dot">▲</span><input type="text" class="oText" placeholder="Risposta 1"><input type="radio" name="ok" value="0"></div>
+                <div class="opt"><span class="dot">◆</span><input type="text" class="oText" placeholder="Risposta 2"><input type="radio" name="ok" value="1"></div>
+                <div class="opt"><span class="dot">●</span><input type="text" class="oText" placeholder="Risposta 3"><input type="radio" name="ok" value="2"></div>
+                <div class="opt"><span class="dot">■</span><input type="text" class="oText" placeholder="Risposta 4"><input type="radio" name="ok" value="3"></div>
+            </div>
+
+            <div id="boxTF" class="hidden">
+                <label class="f">Risposta corretta</label>
+                <div class="row">
+                    <label class="btn ghost grow" style="text-align:center"><input type="radio" name="tf" value="0"> Vero</label>
+                    <label class="btn ghost grow" style="text-align:center"><input type="radio" name="tf" value="1"> Falso</label>
+                </div>
+            </div>
+
+            <label class="f">Tempo (secondi)</label>
+            <input type="number" id="eTime" min="5" max="120" value="20" inputmode="numeric">
+            <p class="hint">Musiche dedicate per 5, 10, 20, 30 e 60 secondi (60 = la musica da 30s due volte).</p>
+
+            <p id="edErr" class="err hidden"></p>
+            <div class="row" style="margin-top:16px">
+                <button class="btn ghost grow" id="edCancel">Annulla</button>
+                <button class="btn accent grow" id="edSave">Conferma</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div id="tokenModal" class="hidden" style="position:fixed;inset:0;z-index:70;background:#0008;display:flex;align-items:center;justify-content:center;padding:16px">
+    <div class="card" style="width:min(420px,100%)">
+        <h2 style="margin:0 0 6px;font-size:18px">Token GitHub</h2>
+        <p class="hint" style="margin:0 0 8px">Per salvare serve il token. Lo incolli una volta sola: resta in questo telefono.</p>
+        <input type="password" id="tmInput" autocapitalize="none" autocomplete="off" placeholder="github_pat_...">
+        <p id="tmErr" class="err"></p>
+        <div class="row" style="margin-top:12px">
+            <button class="btn ghost grow" id="tmNo">Annulla</button>
+            <button class="btn accent grow" id="tmOk">Salva</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
 <script>
-    const PUZZLE_DEFAULT_TEXT = 'Completa il puzzle';
-    let editingId = null;
-    let currentQuestions = [];
-    let draggedId = null;
-    let currentImageData = null; // tipo "Immagine": immagine in base64
+// ============================================================
+//  Stato
+// ============================================================
+const LS_KEY = 'quizAdminCfg';
+// Valori gia' pronti: sul telefono basta inserire il token (solo per modificare)
+const DEFAULTS = { owner: 'gabrisandoval', repo: 'Kahoot', branch: 'main', path: 'server/questions.json', token: '' };
+const DRAFT_KEY = 'quizAdminDraft';
+let cfg = null;
+let questions = [];
+let remoteSha = null;       // sha del file su GitHub quando e' stato letto
+let dirty = false;
+let editingId = null;       // id della domanda in modifica (null = nuova)
+let editImage = '';         // immagine corrente (tipo image)
 
-    // ---- Puzzle: stato del ritaglio ----
-    const cropState = { source: null, nw: 0, nh: 0, zoom: 1, x: 0, y: 0, loaded: false };
-    let puzzleUntouched = false;   // true se in modifica non hai toccato ritaglio/zoom
-    let editingPuzzleData = null;  // immagine gia' ritagliata della domanda in modifica
+const $ = id => document.getElementById(id);
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
 
-    function toggleQuestionType() {
-        const type = document.getElementById('questionType').value;
-        document.getElementById('multipleOptions').style.display = (type === 'multiple' || type === 'image') ? 'block' : 'none';
-        document.getElementById('trueFalseOptions').style.display = (type === 'truefalse') ? 'block' : 'none';
-        document.getElementById('imageUploadField').style.display = (type === 'image') ? 'block' : 'none';
-        document.getElementById('puzzleField').style.display = (type === 'puzzle') ? 'block' : 'none';
+function toast(msg, bad) {
+    const t = $('toast');
+    t.textContent = msg; t.className = bad ? 'bad' : '';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.add('hidden'), 3200);
+}
 
-        // Un puzzle ha bisogno di piu' tempo: suggerisce 30 secondi al posto dei 15 di default
-        const timeInput = document.getElementById('timeLimit');
-        if (type === 'puzzle' && timeInput.value === '15') timeInput.value = '30';
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 
-        // Testo di default per il puzzle (si puo modificare)
-        const qInput = document.getElementById('questionInput');
-        if (type === 'puzzle' && !qInput.value.trim()) qInput.value = PUZZLE_DEFAULT_TEXT;
-        if (type !== 'puzzle' && qInput.value === PUZZLE_DEFAULT_TEXT) qInput.value = '';
+// ============================================================
+//  GitHub API
+// ============================================================
+function apiUrl(p) {
+    const enc = cfg.path.split('/').map(encodeURIComponent).join('/');
+    return 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) + p.replace('{path}', enc);
+}
+function headers(extra) {
+    const h = {
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+    };
+    if (cfg.token) h['Authorization'] = 'Bearer ' + cfg.token;   // senza token: sola lettura (repo pubblico)
+    return Object.assign(h, extra || {});
+}
+async function gh(url, opts) {
+    let res;
+    try { res = await fetch(url, opts); }
+    catch (e) { throw new Error('Nessuna connessione'); }
+    if (!res.ok) {
+        let msg = '';
+        try { msg = (await res.json()).message || ''; } catch (e) {}
+        if (res.status === 401) { const e = new Error('Token non valido o scaduto'); e.auth = true; throw e; }
+        if (res.status === 403) throw new Error('Permesso negato (' + (msg || 'controlla i permessi del token') + ')');
+        if (res.status === 404) throw new Error('File o repository non trovato (controlla utente, repo, branch e percorso; se il repository \u00e8 privato serve il token)');
+        if (res.status === 409 || res.status === 422) { const e = new Error('conflict'); e.conflict = true; throw e; }
+        throw new Error('Errore GitHub ' + res.status + (msg ? ': ' + msg : ''));
     }
+    return res.json();
+}
 
-    // ================= RITAGLIO DEL PUZZLE =================
-    function cropSize() { return document.getElementById('cropBox').clientWidth; }
-    function currentScale() { return (cropSize() / Math.min(cropState.nw, cropState.nh)) * cropState.zoom; }
+function b64ToText(b64) {
+    const bin = atob(b64.replace(/\s/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+}
+function textToB64(text) {
+    const bytes = new TextEncoder().encode(text);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+}
 
-    function clampCrop() {
-        const V = cropSize();
-        const s = currentScale();
-        cropState.x = Math.min(0, Math.max(V - cropState.nw * s, cropState.x));
-        cropState.y = Math.min(0, Math.max(V - cropState.nh * s, cropState.y));
+async function fetchRemote() {
+    const meta = await gh(apiUrl('/contents/{path}') + '?ref=' + encodeURIComponent(cfg.branch), { headers: headers() });
+    let b64 = meta.content;
+    if (!b64 || meta.encoding === 'none') {
+        // file grande (piu' di 1 MB): lo leggo come blob
+        const blob = await gh(apiUrl('/git/blobs/') + meta.sha, { headers: headers() });
+        b64 = blob.content;
     }
+    const data = JSON.parse(b64ToText(b64) || '[]');
+    if (!Array.isArray(data)) throw new Error('Il file non contiene una lista di domande');
+    return { data, sha: meta.sha };
+}
 
-    function renderCrop() {
-        const img = document.getElementById('cropImg');
-        const s = currentScale();
-        img.style.width = (cropState.nw * s) + 'px';
-        img.style.height = (cropState.nh * s) + 'px';
-        img.style.left = cropState.x + 'px';
-        img.style.top = cropState.y + 'px';
+async function pushRemote() {
+    const body = {
+        message: 'Aggiornamento domande dal telefono',
+        content: textToB64(JSON.stringify(questions, null, 2)),
+        branch: cfg.branch
+    };
+    if (remoteSha) body.sha = remoteSha;
+    const res = await gh(apiUrl('/contents/{path}'), {
+        method: 'PUT',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+    });
+    remoteSha = res.content.sha;
+}
+
+// ============================================================
+//  Caricamento / salvataggio
+// ============================================================
+function setDirty(v) {
+    dirty = v;
+    $('pushBtn').disabled = !v;
+    const s = $('state');
+    s.textContent = v ? 'Da salvare' : 'Sincronizzato';
+    s.className = 'chip' + (v ? ' dirty' : '');
+    if (v) lsSet(DRAFT_KEY, { questions, remoteSha }); else lsDel(DRAFT_KEY);
+}
+
+async function loadAll(force) {
+    $('state').textContent = 'Carico...';
+    try {
+        const r = await fetchRemote();
+        const draft = lsGet(DRAFT_KEY);
+        if (!force && draft && draft.questions && draft.remoteSha === r.sha) {
+            questions = draft.questions; remoteSha = r.sha; render(); setDirty(true);
+            toast('Ripristinate modifiche non ancora salvate');
+            return;
+        }
+        if (!force && draft && draft.questions && draft.remoteSha !== r.sha) {
+            toast('Il file su GitHub è cambiato: bozza locale scartata', true);
+        }
+        questions = r.data; remoteSha = r.sha;
+        render(); setDirty(false);
+    } catch (e) {
+        const draft = lsGet(DRAFT_KEY);
+        if (draft && draft.questions) {
+            questions = draft.questions; remoteSha = draft.remoteSha; render(); setDirty(true);
+            toast(e.message + ' - uso la bozza locale', true);
+        } else {
+            questions = []; render(); $('state').textContent = 'Offline';
+            toast(e.message, true);
+        }
     }
+}
 
-    // Carica un'immagine (data URL) nel selettore e la centra
-    function setupCropImage(src, untouched) {
-        const probe = new Image();
-        probe.onload = () => {
-            cropState.source = probe;
-            cropState.nw = probe.naturalWidth;
-            cropState.nh = probe.naturalHeight;
-            cropState.zoom = 1;
-            document.getElementById('zoomSlider').value = 100;
-
-            const img = document.getElementById('cropImg');
-            img.src = src;
-            img.style.display = 'block';
-
-            const V = cropSize();
-            const s = currentScale();
-            cropState.x = (V - cropState.nw * s) / 2;
-            cropState.y = (V - cropState.nh * s) / 2;
-            clampCrop();
-            renderCrop();
-
-            cropState.loaded = true;
-            puzzleUntouched = untouched;
+function askToken(msg) {
+    return new Promise(resolve => {
+        $('tmErr').textContent = msg || ''; $('tmInput').value = '';
+        show('tokenModal'); setTimeout(() => $('tmInput').focus(), 50);
+        const done = ok => { hide('tokenModal'); $('tmOk').onclick = null; $('tmNo').onclick = null; resolve(ok); };
+        $('tmNo').onclick = () => done(false);
+        $('tmOk').onclick = () => {
+            const t = $('tmInput').value.trim();
+            if (!t) { $('tmErr').textContent = 'Incolla il token'; return; }
+            cfg.token = t; lsSet(LS_KEY, cfg); done(true);
         };
-        probe.src = src;
+    });
+}
+
+async function pushNow() {
+    if (!dirty) return;
+    if (!cfg.token && !(await askToken())) return;
+    let retry = false;
+    const btn = $('pushBtn');
+    btn.disabled = true; btn.textContent = 'Salvo...';
+    try {
+        await pushRemote();
+        setDirty(false);
+        toast('Salvato su GitHub ✔');
+    } catch (e) {
+        if (e.conflict) {
+            // il file e' stato modificato altrove: riprovo usando lo sha aggiornato, ma solo se confermi
+            if (confirm('Il file su GitHub è stato modificato altrove.\nSovrascrivere con le tue modifiche?')) {
+                try {
+                    const meta = await gh(apiUrl('/contents/{path}') + '?ref=' + encodeURIComponent(cfg.branch), { headers: headers() });
+                    remoteSha = meta.sha;
+                    await pushRemote();
+                    setDirty(false);
+                    toast('Salvato su GitHub ✔');
+                } catch (e2) { toast(e2.message, true); }
+            }
+        } else if (e.auth) {
+            cfg.token = ''; lsSet(LS_KEY, cfg);
+            retry = true;
+        } else toast(e.message, true);
+    } finally {
+        btn.textContent = 'Salva su GitHub';
+        btn.disabled = !dirty;
     }
+    if (retry && await askToken('Token non valido o scaduto: inseriscine uno nuovo')) return pushNow();
+}
 
-    function loadPuzzleImage() {
-        const file = document.getElementById('puzzleFileInput').files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => setupCropImage(e.target.result, false);
-        reader.readAsDataURL(file);
+function changed() { setDirty(true); render(); }
+
+// ============================================================
+//  Lista
+// ============================================================
+function kindOf(q) {
+    if (q.type === 'puzzle') return 'puzzle';
+    if (q.imageData) return 'image';
+    if (q.options && q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso') return 'truefalse';
+    return 'multiple';
+}
+const KIND_LABEL = { multiple:'Multipla', truefalse:'Vero/Falso', image:'Immagine', puzzle:'Puzzle' };
+const KIND_ICON = { multiple:'☰', truefalse:'✔✖', image:'🖼', puzzle:'🧩' };
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function render() {
+    const term = $('search').value.trim().toLowerCase();
+    const f = $('filter').value;
+    $('count').textContent = questions.length;
+    const list = $('list');
+    const items = questions.map((q, i) => ({ q, i })).filter(({ q }) => {
+        const k = kindOf(q);
+        if (f === 'off') { if (q.enabled !== false) return false; }
+        else if (f !== 'all' && k !== f) return false;
+        if (term && !(String(q.question || '').toLowerCase().includes(term) || (q.options || []).some(o => String(o).toLowerCase().includes(term)))) return false;
+        return true;
+    });
+    if (!items.length) {
+        list.innerHTML = '<div class="empty">' + (questions.length ? 'Nessuna domanda trovata' : 'Nessuna domanda. Tocca “Nuova domanda”.') + '</div>';
+        return;
     }
+    const canMove = !term && f === 'all';
+    list.innerHTML = items.map(({ q, i }) => {
+        const k = kindOf(q);
+        const thumb = (k === 'image' || k === 'puzzle') && q.imageData
+            ? 'style="background-image:url(\'' + q.imageData.replace(/'/g, '%27') + '\')"' : '';
+        const ans = (k === 'multiple' || k === 'truefalse' || k === 'image') && q.options
+            ? ' · ✔ ' + esc(q.options[q.correctIndex]) : '';
+        return '<div class="q' + (q.enabled === false ? ' off' : '') + '" data-id="' + esc(q.id) + '">' +
+            '<input type="checkbox" class="sw" data-a="tog"' + (q.enabled !== false ? ' checked' : '') + '>' +
+            '<div class="thumb" ' + thumb + '>' + (thumb ? '' : KIND_ICON[k]) + '</div>' +
+            '<div class="body"><div class="t">' + esc(q.question) + '</div>' +
+            '<div class="m">' + KIND_LABEL[k] + ' · ' + esc(q.timeLimit) + 's' + ans + '</div>' +
+            '<div class="acts">' +
+            '<button data-a="edit">Modifica</button>' +
+            '<button data-a="dup">Duplica</button>' +
+            (canMove ? '<button data-a="up"' + (i === 0 ? ' disabled' : '') + '>↑</button><button data-a="down"' + (i === questions.length - 1 ? ' disabled' : '') + '>↓</button>' : '') +
+            '<button data-a="del" class="del">Elimina</button>' +
+            '</div></div></div>';
+    }).join('');
+}
 
-    function onZoom(value) {
-        if (!cropState.loaded) return;
-        const V = cropSize();
-        const oldS = currentScale();
-        // punto dell'immagine che sta al centro: resta al centro mentre ingrandisci
-        const cx = (V / 2 - cropState.x) / oldS;
-        const cy = (V / 2 - cropState.y) / oldS;
-        cropState.zoom = value / 100;
-        const s = currentScale();
-        cropState.x = V / 2 - cx * s;
-        cropState.y = V / 2 - cy * s;
-        clampCrop();
-        renderCrop();
-        puzzleUntouched = false;
+$('list').addEventListener('click', e => {
+    const el = e.target.closest('[data-a]');
+    if (!el) return;
+    const id = el.closest('.q').dataset.id;
+    const i = questions.findIndex(q => q.id === id);
+    if (i < 0) return;
+    const a = el.dataset.a;
+    if (a === 'tog') { questions[i].enabled = el.checked; changed(); }
+    else if (a === 'edit') openEditor(id);
+    else if (a === 'dup') {
+        const c = JSON.parse(JSON.stringify(questions[i]));
+        c.id = newId(); c.question = c.question + ' (copia)';
+        questions.splice(i + 1, 0, c); changed(); toast('Domanda duplicata');
     }
-
-    // Trascinamento (mouse e touch)
-    (function initCropDrag() {
-        const box = document.getElementById('cropBox');
-        let dragging = false, startX = 0, startY = 0, originX = 0, originY = 0;
-
-        box.addEventListener('pointerdown', (e) => {
-            if (!cropState.loaded) return;
-            dragging = true;
-            startX = e.clientX; startY = e.clientY;
-            originX = cropState.x; originY = cropState.y;
-            box.setPointerCapture(e.pointerId);
-            box.style.cursor = 'grabbing';
-        });
-        box.addEventListener('pointermove', (e) => {
-            if (!dragging) return;
-            cropState.x = originX + (e.clientX - startX);
-            cropState.y = originY + (e.clientY - startY);
-            clampCrop();
-            renderCrop();
-            puzzleUntouched = false;
-        });
-        const end = () => { dragging = false; box.style.cursor = 'grab'; };
-        box.addEventListener('pointerup', end);
-        box.addEventListener('pointercancel', end);
-    })();
-
-    // Ritaglia la parte visibile e la salva come quadrato 720x720 (JPEG leggero)
-    function exportCroppedImage() {
-        const V = cropSize();
-        const s = currentScale();
-        const OUT = 720; // divisibile per 3
-        const canvas = document.createElement('canvas');
-        canvas.width = OUT;
-        canvas.height = OUT;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(cropState.source, -cropState.x / s, -cropState.y / s, V / s, V / s, 0, 0, OUT, OUT);
-        return canvas.toDataURL('image/jpeg', 0.88);
+    else if (a === 'up' && i > 0) { [questions[i - 1], questions[i]] = [questions[i], questions[i - 1]]; changed(); }
+    else if (a === 'down' && i < questions.length - 1) { [questions[i + 1], questions[i]] = [questions[i], questions[i + 1]]; changed(); }
+    else if (a === 'del') {
+        if (confirm('Eliminare questa domanda?')) { questions.splice(i, 1); changed(); }
     }
+});
 
-    function resetPuzzleField() {
-        cropState.loaded = false;
-        cropState.source = null;
-        puzzleUntouched = false;
-        editingPuzzleData = null;
-        const img = document.getElementById('cropImg');
-        img.removeAttribute('src');
-        img.style.display = 'none';
-        document.getElementById('puzzleFileInput').value = '';
-        document.getElementById('zoomSlider').value = 100;
+function newId() { let id = Date.now().toString(); while (questions.some(q => q.id === id)) id = String(+id + 1); return id; }
+
+$('search').addEventListener('input', render);
+$('filter').addEventListener('change', render);
+$('allOn').onclick = () => { questions.forEach(q => q.enabled = true); changed(); };
+$('allOff').onclick = () => { questions.forEach(q => q.enabled = false); changed(); };
+$('pushBtn').onclick = pushNow;
+
+// ============================================================
+//  Menu
+// ============================================================
+$('menuBtn').onclick = () => show('menu');
+$('menu').addEventListener('click', e => { if (e.target.id === 'menu') hide('menu'); });
+$('mReload').onclick = async () => {
+    hide('menu');
+    if (dirty && !confirm('Hai modifiche non salvate: ricaricando le perdi. Continuare?')) return;
+    await loadAll(true);
+};
+$('mExport').onclick = () => {
+    hide('menu');
+    const blob = new Blob([JSON.stringify(questions, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'questions.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('mImport').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+    hide('menu');
+    const file = e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    try {
+        const data = JSON.parse(await file.text());
+        if (!Array.isArray(data)) throw new Error();
+        if (!confirm('Importare ' + data.length + ' domande? Sostituiscono quelle attuali (non ancora salvate su GitHub).')) return;
+        data.forEach(q => { if (!q.id) q.id = newId(); });
+        questions = data; changed(); toast('Importate ' + data.length + ' domande');
+    } catch (err) { toast('File JSON non valido', true); }
+};
+$('mSettings').onclick = () => { hide('menu'); openSetup(true); };
+
+// ============================================================
+//  Impostazioni
+// ============================================================
+function openSetup(canClose) {
+    const c = Object.assign({}, DEFAULTS, cfg || {});
+    $('cOwner').value = c.owner || ''; $('cRepo').value = c.repo || '';
+    $('cBranch').value = c.branch || 'main'; $('cPath').value = c.path || 'server/questions.json';
+    $('cToken').value = c.token || '';
+    $('setupClose').classList.toggle('hidden', !canClose);
+    hide('setupErr'); hide('main'); show('setup');
+}
+$('setupClose').onclick = () => { hide('setup'); show('main'); };
+$('setupSave').onclick = async () => {
+    const next = {
+        owner: $('cOwner').value.trim(), repo: $('cRepo').value.trim(),
+        branch: $('cBranch').value.trim() || 'main',
+        path: $('cPath').value.trim().replace(/^\/+/, ''), token: $('cToken').value.trim()
+    };
+    if (!next.owner || !next.repo || !next.path) {
+        $('setupErr').textContent = 'Compila tutti i campi'; show('setupErr'); return;
     }
+    const prev = cfg; cfg = next;
+    const btn = $('setupSave'); btn.disabled = true; btn.textContent = 'Controllo...';
+    try {
+        await fetchRemote();
+        lsSet(LS_KEY, cfg);
+        hide('setup'); show('main');
+        await loadAll(!!prev);
+    } catch (e) {
+        cfg = prev; $('setupErr').textContent = e.message; show('setupErr');
+    } finally { btn.disabled = false; btn.textContent = 'Continua'; }
+};
+$('forget').onclick = () => {
+    if (!confirm('Rimuovere token e impostazioni da questo telefono?')) return;
+    lsDel(LS_KEY); lsDel(DRAFT_KEY); cfg = Object.assign({}, DEFAULTS); questions = [];
+    openSetup(true);
+};
 
-    // ================= SALVATAGGIO =================
-    async function saveQuestion() {
-        const type = document.getElementById('questionType').value;
-        const question = document.getElementById('questionInput').value.trim();
-        const timeLimit = parseInt(document.getElementById('timeLimit').value);
-        const messageEl = document.getElementById('message');
+// ============================================================
+//  Editor
+// ============================================================
+const crop = { img: null, zoom: 1, ox: 0, oy: 0, S: 320 };
 
-        let questionData;
+function fileToImage(file) {
+    return new Promise((res, rej) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); res(img); };
+        img.onerror = () => rej(new Error('Immagine non leggibile'));
+        img.src = url;
+    });
+}
+function srcToImage(src) {
+    return new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => res(img); img.onerror = () => rej(new Error('Immagine non leggibile'));
+        img.src = src;
+    });
+}
+function shrink(img, max) {
+    const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.82);
+}
 
-        if (type === 'puzzle') {
-            if (!cropState.loaded) {
-                messageEl.innerText = 'Carica un\'immagine per il puzzle';
-                return;
-            }
-            if (isNaN(timeLimit)) {
-                messageEl.innerText = 'Inserisci il tempo limite';
-                return;
-            }
-            const imageData = (puzzleUntouched && editingPuzzleData) ? editingPuzzleData : exportCroppedImage();
-            questionData = {
-                type: 'puzzle',
-                question: question || PUZZLE_DEFAULT_TEXT,
-                timeLimit,
-                imageData
-            };
-        } else {
-            let options, correctIndex;
+function cropScale() { return (crop.S / Math.min(crop.img.naturalWidth, crop.img.naturalHeight)) * crop.zoom; }
+function cropClamp() {
+    const s = cropScale();
+    const w = crop.img.naturalWidth * s, h = crop.img.naturalHeight * s;
+    crop.ox = Math.min(0, Math.max(crop.S - w, crop.ox));
+    crop.oy = Math.min(0, Math.max(crop.S - h, crop.oy));
+}
+function cropDraw() {
+    const c = $('cropCanvas'), ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (!crop.img) return;
+    cropClamp();
+    const s = cropScale();
+    ctx.drawImage(crop.img, crop.ox, crop.oy, crop.img.naturalWidth * s, crop.img.naturalHeight * s);
+}
+function cropSet(img) {
+    crop.img = img; crop.zoom = 1; $('zoom').value = 100;
+    const s = cropScale();
+    crop.ox = (crop.S - img.naturalWidth * s) / 2;
+    crop.oy = (crop.S - img.naturalHeight * s) / 2;
+    cropDraw();
+}
+function cropExport() {
+    const out = document.createElement('canvas'); out.width = out.height = 720;
+    const k = 720 / crop.S, s = cropScale() * k;
+    out.getContext('2d').drawImage(crop.img, crop.ox * k, crop.oy * k, crop.img.naturalWidth * s, crop.img.naturalHeight * s);
+    return out.toDataURL('image/jpeg', 0.85);
+}
+$('zoom').addEventListener('input', e => {
+    if (!crop.img) return;
+    // zoom attorno al centro del riquadro
+    const old = cropScale(), cx = (crop.S / 2 - crop.ox) / old, cy = (crop.S / 2 - crop.oy) / old;
+    crop.zoom = e.target.value / 100;
+    const s = cropScale();
+    crop.ox = crop.S / 2 - cx * s; crop.oy = crop.S / 2 - cy * s;
+    cropDraw();
+});
+(function dragInit() {
+    const box = $('cropBox'); let drag = null;
+    box.addEventListener('pointerdown', e => {
+        if (!crop.img) return;
+        drag = { x: e.clientX, y: e.clientY, ox: crop.ox, oy: crop.oy };
+        box.setPointerCapture(e.pointerId);
+    });
+    box.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const k = crop.S / box.clientWidth;
+        crop.ox = drag.ox + (e.clientX - drag.x) * k;
+        crop.oy = drag.oy + (e.clientY - drag.y) * k;
+        cropDraw();
+    });
+    const end = () => { drag = null; };
+    box.addEventListener('pointerup', end); box.addEventListener('pointercancel', end);
+})();
 
-            if (type === 'truefalse') {
-                options = ['Vero', 'Falso'];
-                const selected = document.querySelector('input[name="tfCorrectOption"]:checked');
-                correctIndex = selected ? parseInt(selected.value) : NaN;
-            } else {
-                options = [
-                    document.getElementById('option0').value.trim(),
-                    document.getElementById('option1').value.trim(),
-                    document.getElementById('option2').value.trim(),
-                    document.getElementById('option3').value.trim()
-                ];
-                const selected = document.querySelector('input[name="correctOption"]:checked');
-                correctIndex = selected ? parseInt(selected.value) : NaN;
-            }
+$('ePzFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { cropSet(await fileToImage(f)); } catch (err) { showEdErr(err.message); }
+};
+$('eImgFile').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+        editImage = shrink(await fileToImage(f), 1100);
+        $('imgPrev').src = editImage; show('imgPrev');
+    } catch (err) { showEdErr(err.message); }
+};
 
-            if (type === 'image' && !currentImageData) {
-                messageEl.innerText = 'Carica un\'immagine';
-                return;
-            }
+function showEdErr(m) { $('edErr').textContent = m; show('edErr'); }
 
-            if (!question || options.some(o => !o) || isNaN(correctIndex) || isNaN(timeLimit)) {
-                messageEl.innerText = 'Compila tutti i campi e seleziona la risposta corretta';
-                return;
-            }
+function applyType() {
+    const t = $('eType').value;
+    $('boxMultiple').classList.toggle('hidden', !(t === 'multiple' || t === 'image'));
+    $('boxTF').classList.toggle('hidden', t !== 'truefalse');
+    $('boxImage').classList.toggle('hidden', t !== 'image');
+    $('boxPuzzle').classList.toggle('hidden', t !== 'puzzle');
+}
+let lastType = 'multiple';
+$('eType').addEventListener('change', () => {
+    const t = $('eType').value;
+    applyType();
+    if (t === 'puzzle') {
+        if (!editingId || !$('eText').value.trim()) $('eText').value = $('eText').value.trim() || 'Completa il puzzle';
+        if (lastType !== 'puzzle' && ($('eTime').value === '20' || !$('eTime').value)) $('eTime').value = 30;
+    }
+    lastType = t;
+});
 
-            questionData = { question, options, correctIndex, timeLimit };
-            if (type === 'image') {
-                questionData.imageData = currentImageData;
-            }
+function openEditor(id) {
+    editingId = id || null; editImage = '';
+    hide('edErr'); crop.img = null; cropDraw();
+    $('ePzFile').value = ''; $('eImgFile').value = ''; hide('imgPrev');
+    document.querySelectorAll('input[name=ok],input[name=tf]').forEach(r => r.checked = false);
+    document.querySelectorAll('.oText').forEach(o => o.value = '');
+
+    if (!id) {
+        $('edTitle').textContent = 'Nuova domanda';
+        $('eType').value = 'multiple'; $('eText').value = ''; $('eTime').value = 20;
+        lastType = 'multiple';
+    } else {
+        const q = questions.find(x => x.id === id);
+        const k = kindOf(q);
+        $('edTitle').textContent = 'Modifica domanda';
+        $('eType').value = k; lastType = k;
+        $('eText').value = q.question || ''; $('eTime').value = q.timeLimit || 20;
+        if (k === 'multiple' || k === 'image') {
+            document.querySelectorAll('.oText').forEach((o, i) => o.value = (q.options || [])[i] || '');
+            const r = document.querySelector('input[name=ok][value="' + q.correctIndex + '"]'); if (r) r.checked = true;
         }
-
-        const body = JSON.stringify(questionData);
-
-        if (editingId) {
-            await fetch('/api/questions/' + editingId, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body
-            });
-            messageEl.innerText = 'Domanda modificata!';
-            cancelEdit();
-        } else {
-            await fetch('/api/questions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body
-            });
-            messageEl.innerText = 'Domanda salvata!';
-            clearForm();
+        if (k === 'truefalse') {
+            const r = document.querySelector('input[name=tf][value="' + q.correctIndex + '"]'); if (r) r.checked = true;
         }
-
-        loadQuestionList();
+        if (k === 'image' && q.imageData) { editImage = q.imageData; $('imgPrev').src = editImage; show('imgPrev'); }
+        if (k === 'puzzle' && q.imageData) srcToImage(q.imageData).then(cropSet).catch(() => {});
     }
+    applyType();
+    hide('main'); show('editor'); window.scrollTo(0, 0); $('editor').scrollTop = 0;
+}
 
-    function clearForm() {
-        document.getElementById('questionInput').value = '';
-        document.getElementById('option0').value = '';
-        document.getElementById('option1').value = '';
-        document.getElementById('option2').value = '';
-        document.getElementById('option3').value = '';
-        document.getElementById('timeLimit').value = '15';
-        document.getElementById('questionType').value = 'multiple';
-        toggleQuestionType();
+function closeEditor() { hide('editor'); show('main'); }
+$('addBtn').onclick = () => openEditor(null);
+$('edBack').onclick = closeEditor;
+$('edCancel').onclick = closeEditor;
 
-        document.querySelectorAll('input[name="correctOption"]').forEach(r => r.checked = false);
-        document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => r.checked = false);
+$('edSave').onclick = () => {
+    hide('edErr');
+    const t = $('eType').value;
+    const text = $('eText').value.trim();
+    const timeLimit = parseInt($('eTime').value);
+    if (isNaN(timeLimit) || timeLimit < 3) return showEdErr('Inserisci un tempo valido (almeno 3 secondi)');
 
-        currentImageData = null;
-        document.getElementById('imageInput').value = '';
-        document.getElementById('imagePreview').style.display = 'none';
-
-        resetPuzzleField();
-    }
-
-    function editQuestion(id) {
-        const q = currentQuestions.find(q => q.id === id);
-        if (!q) return;
-
-        editingId = q.id;
-        document.getElementById('questionInput').value = q.question;
-
-        if (q.type === 'puzzle') {
-            document.getElementById('questionType').value = 'puzzle';
-            toggleQuestionType();            // mostra il selettore prima di caricare l'immagine
-            editingPuzzleData = q.imageData;
-            setupCropImage(q.imageData, true);
-        } else if (q.imageData) {
-            document.getElementById('questionType').value = 'image';
-            toggleQuestionType();
-            currentImageData = q.imageData;
-            document.getElementById('imagePreview').src = q.imageData;
-            document.getElementById('imagePreview').style.display = 'block';
-            fillOptions(q);
-        } else if (q.options.length === 2 && q.options[0] === 'Vero' && q.options[1] === 'Falso') {
-            document.getElementById('questionType').value = 'truefalse';
-            toggleQuestionType();
-            document.querySelectorAll('input[name="tfCorrectOption"]').forEach(r => {
-                r.checked = (parseInt(r.value) === q.correctIndex);
-            });
+    let q;
+    if (t === 'puzzle') {
+        if (!crop.img) return showEdErr('Carica un\'immagine per il puzzle');
+        q = { type: 'puzzle', question: text || 'Completa il puzzle', timeLimit, imageData: cropExport() };
+    } else {
+        if (!text) return showEdErr('Scrivi la domanda');
+        let options, correctIndex;
+        if (t === 'truefalse') {
+            options = ['Vero', 'Falso'];
+            const r = document.querySelector('input[name=tf]:checked');
+            correctIndex = r ? +r.value : NaN;
         } else {
-            document.getElementById('questionType').value = 'multiple';
-            toggleQuestionType();
-            fillOptions(q);
+            options = [...document.querySelectorAll('.oText')].map(o => o.value.trim());
+            const r = document.querySelector('input[name=ok]:checked');
+            correctIndex = r ? +r.value : NaN;
+            if (options.some(o => !o)) return showEdErr('Compila tutte e 4 le risposte');
         }
-
-        document.getElementById('timeLimit').value = q.timeLimit; // dopo toggleQuestionType
-        document.getElementById('formTitle').innerText = 'Modifica domanda';
-        document.getElementById('cancelBtn').style.display = 'inline-block';
+        if (isNaN(correctIndex)) return showEdErr('Seleziona la risposta corretta');
+        if (t === 'image' && !editImage) return showEdErr('Carica un\'immagine');
+        q = { question: text, options, correctIndex, timeLimit };
+        if (t === 'image') q.imageData = editImage;
     }
 
-    function fillOptions(q) {
-        document.getElementById('option0').value = q.options[0];
-        document.getElementById('option1').value = q.options[1];
-        document.getElementById('option2').value = q.options[2];
-        document.getElementById('option3').value = q.options[3];
-        document.querySelectorAll('input[name="correctOption"]').forEach(r => {
-            r.checked = (parseInt(r.value) === q.correctIndex);
-        });
+    if (editingId) {
+        const i = questions.findIndex(x => x.id === editingId);
+        const old = questions[i];
+        questions[i] = Object.assign({}, q, { id: editingId, enabled: old.enabled });
+        if (questions[i].enabled === undefined) delete questions[i].enabled;
+    } else {
+        questions.push(Object.assign({ id: newId() }, q));
     }
+    closeEditor(); changed();
+    toast('Ricorda di premere “Salva su GitHub”');
+};
 
-    function cancelEdit() {
-        editingId = null;
-        clearForm();
-        document.getElementById('formTitle').innerText = 'Aggiungi una domanda';
-        document.getElementById('cancelBtn').style.display = 'none';
-    }
+// ============================================================
+//  Avvio
+// ============================================================
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
-    async function deleteQuestion(id) {
-        if (!confirm('Eliminare questa domanda?')) return;
-        await fetch('/api/questions/' + id, { method: 'DELETE' });
-        loadQuestionList();
-    }
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-    async function toggleEnabled(id, enabled) {
-        await fetch('/api/questions/' + id + '/toggle', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        loadQuestionList();
-    }
-
-    async function toggleAll(enabled) {
-        await Promise.all(
-            currentQuestions.map(q =>
-                fetch('/api/questions/' + q.id + '/toggle', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled })
-                })
-            )
-        );
-        loadQuestionList();
-    }
-
-    function previewImage() {
-        const file = document.getElementById('imageInput').files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            currentImageData = e.target.result;
-            const preview = document.getElementById('imagePreview');
-            preview.src = currentImageData;
-            preview.style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-    }
-
-    async function loadQuestionList() {
-        const res = await fetch('/api/questions');
-        currentQuestions = await res.json();
-
-        document.getElementById('questionCount').innerText = currentQuestions.filter(q => q.enabled !== false).length;
-
-        document.getElementById('questionList').innerHTML = currentQuestions.map(q => {
-            const isEnabled = q.enabled !== false;
-            const isPuzzle = q.type === 'puzzle';
-            const thumb = q.imageData
-                ? '<img src="' + q.imageData + '" style="width:44px; height:44px; object-fit:cover; border-radius:6px;">'
-                : '';
-            const answer = isPuzzle
-                ? '<em style="opacity:.7;">Puzzle 3×3</em>'
-                : '<strong style="color:var(--green);">(' + q.options[q.correctIndex] + ')</strong>';
-
-            return '<div class="card" data-id="' + q.id + '" ' +
-                'style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:16px;' + (isEnabled ? '' : ' opacity:.5;') + '">' +
-                    '<span style="display:flex; align-items:center; gap:10px;">' +
-                        '<input type="checkbox" ' + (isEnabled ? 'checked' : '') + ' onchange="toggleEnabled(\'' + q.id + '\', this.checked)" style="width:20px; height:20px; cursor:pointer;">' +
-                        '<span draggable="true" class="drag-handle" style="cursor:grab; opacity:.4; font-size:20px; user-select:none;">☰</span>' +
-                        thumb +
-                        '<span>' + q.question + ' ' + answer + '</span>' +
-                    '</span>' +
-                    '<span style="display:flex; gap:8px;">' +
-                        '<button class="btn" onclick="editQuestion(\'' + q.id + '\')">Modifica</button>' +
-                        '<button class="btn" onclick="deleteQuestion(\'' + q.id + '\')">Elimina</button>' +
-                    '</span>' +
-                '</div>';
-        }).join('');
-
-        attachDragEvents();
-    }
-
-    function attachDragEvents() {
-        const handles = document.querySelectorAll('.drag-handle');
-
-        handles.forEach(handle => {
-            const item = handle.closest('.card');
-
-            handle.addEventListener('dragstart', () => {
-                draggedId = item.dataset.id;
-                item.style.opacity = '0.4';
-            });
-
-            handle.addEventListener('dragend', () => {
-                item.style.opacity = '1';
-            });
-        });
-
-        document.querySelectorAll('#questionList .card').forEach(item => {
-            item.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                const dragging = document.querySelector('#questionList [data-id="' + draggedId + '"]');
-                if (dragging && dragging !== item) {
-                    const rect = item.getBoundingClientRect();
-                    const isAfter = e.clientY > rect.top + rect.height / 2;
-                    item.parentNode.insertBefore(dragging, isAfter ? item.nextSibling : item);
-                }
-            });
-
-            item.addEventListener('drop', async () => {
-                const newOrder = Array.from(document.querySelectorAll('#questionList .card'))
-                    .map(el => el.dataset.id);
-
-                await fetch('/api/questions/reorder', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ orderedIds: newOrder })
-                });
-            });
-        });
-    }
-
-    loadQuestionList();
+cfg = Object.assign({}, DEFAULTS, lsGet(LS_KEY) || {});
+show('main'); loadAll(false);
 </script>
-<script src="fullscreen.js"></script>
 </body>
 </html>
